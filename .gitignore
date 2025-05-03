@@ -1,0 +1,22 @@
+# Byte-compiled / optimized
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Poetry & env
+poetry.lock
+.env
+
+# PyTorch & MLflow
+mlruns/
+checkpoints/
+*.pth
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VSCode
+.vscode/
+
+# Logs
+*.log
