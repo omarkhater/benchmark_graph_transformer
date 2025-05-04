@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 """
-Training pipeline for GraphTransformer benchmarks with health metrics logging.
+Training pipeline for GraphTransformer benchmarks with reproducible seeding
+and health-metrics logging.
 """
-from typing import Dict, Optional
+import random
+from typing import Optional
 
 import mlflow
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,52 +16,29 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
 
 from graph_transformer_benchmark.data import build_dataloaders, enrich_batch
+from graph_transformer_benchmark.evaluate import evaluate_accuracy
 from graph_transformer_benchmark.model import build_model
-from graph_transformer_benchmark.utils import init_mlflow, log_config
+from graph_transformer_benchmark.utils import (
+    get_device,
+    init_mlflow,
+    log_config,
+    log_health_metrics,
+    set_seed,
+)
+
+_GLOBAL_SEED: int = 0
 
 
-def get_device(preferred: str) -> torch.device:
+def worker_init_fn(worker_id: int) -> None:
     """
-    Return the compute device based on availability and preference.
+    Initialize each DataLoader worker with a reproducible seed.
 
     Args:
-        preferred (str): 'cuda' or 'cpu'.
-
-    Returns:
-        torch.device: Selected device.
+        worker_id (int): Worker index.
     """
-    if preferred == "cuda" and torch.cuda.is_available():
-        return torch.device("cuda")
-    return torch.device("cpu")
-
-
-def evaluate_accuracy(
-    model: nn.Module,
-    loader: DataLoader,
-    device: torch.device,
-    cfg: DictConfig,
-) -> float:
-    """
-    Compute classification accuracy over a dataset.
-
-    Args:
-        model (nn.Module): Trained model.
-        loader (DataLoader): Evaluation data loader.
-        device (torch.device): Compute device.
-        cfg (DictConfig): Data configuration.
-
-    Returns:
-        float: Classification accuracy.
-    """
-    model.eval()
-    correct, total = 0, len(loader.dataset)
-    with torch.no_grad():
-        for batch in tqdm(loader, desc="Evaluating", leave=False):
-            batch = batch.to(device)
-            batch = enrich_batch(batch, cfg.data)
-            preds = model(batch).argmax(dim=-1)
-            correct += int((preds == batch.y).sum())
-    return correct / total
+    seed = _GLOBAL_SEED + worker_id
+    random.seed(seed)
+    np.random.seed(seed)
 
 
 def train_one_epoch(
@@ -97,41 +77,17 @@ def train_one_epoch(
     return total_loss / len(loader.dataset)
 
 
-def log_health_metrics(
-    model: nn.Module,
-    optimizer: torch.optim.Optimizer,
-    epoch: int,
-) -> None:
-    """
-    Log gradient norms, weight norms, and learning rates.
-
-    Args:
-        model (nn.Module): Trained model.
-        optimizer (Optimizer): Optimizer.
-        epoch (int): Current epoch number.
-    """
-    grad_norms: Dict[str, float] = {}
-    weight_norms: Dict[str, float] = {}
-    for name, param in model.named_parameters():
-        if param.grad is not None:
-            grad_norms[f"grad_norm/{name}"] = param.grad.norm().item()
-        weight_norms[f"weight_norm/{name}"] = param.data.norm().item()
-    mlflow.log_metrics(grad_norms, step=epoch)
-    mlflow.log_metrics(weight_norms, step=epoch)
-    for idx, group in enumerate(optimizer.param_groups):
-        lr = group["lr"]
-        mlflow.log_metric(f"lr/group_{idx}", lr, step=epoch)
-
-
 def run_training(cfg: DictConfig) -> None:
     """
     Execute training and evaluation, logging metrics to MLflow.
 
-    Logs loss, accuracy, health metrics, and model artifacts.
-
     Args:
         cfg (DictConfig): Configuration for data, model, training.
     """
+    set_seed(cfg.training.seed)
+    global _GLOBAL_SEED
+    _GLOBAL_SEED = cfg.training.seed
+
     init_mlflow(cfg)
     run_name: Optional[str] = cfg.training.mlflow.run_name
     description: Optional[str] = cfg.training.mlflow.description
@@ -141,7 +97,11 @@ def run_training(cfg: DictConfig) -> None:
             mlflow.set_tag("mlflow.note.content", description)
         log_config(cfg)
 
-        train_loader, test_loader = build_dataloaders(cfg)
+        generator = torch.Generator().manual_seed(cfg.training.seed)
+        train_loader, test_loader = build_dataloaders(
+            cfg, generator=generator, worker_init_fn=worker_init_fn
+        )
+
         device = get_device(cfg.training.device)
         num_feat = train_loader.dataset.num_node_features
         num_cls = train_loader.dataset.num_classes
@@ -149,38 +109,24 @@ def run_training(cfg: DictConfig) -> None:
         optimizer = torch.optim.Adam(model.parameters(), lr=cfg.training.lr)
 
         for epoch in trange(
-                1,
-                cfg.training.epochs + 1,
-                desc="Epochs",
-                unit="epoch",
+            1, cfg.training.epochs + 1, desc="Epochs", unit="epoch"
         ):
             loss = train_one_epoch(
-                model,
-                train_loader,
-                optimizer,
-                device,
-                cfg,
-                epoch,
+                model, train_loader, optimizer, device, cfg, epoch
             )
             mlflow.log_metric("train_loss", loss, step=epoch)
 
-            accuracy = evaluate_accuracy(
-                model,
-                test_loader,
-                device,
-                cfg,
+            val_acc = evaluate_accuracy(
+                model, test_loader, device, cfg
             )
-            mlflow.log_metric("val_acc", accuracy, step=epoch)
+            mlflow.log_metric("val_acc", val_acc, step=epoch)
 
             log_health_metrics(model, optimizer, epoch)
 
-        final_acc = evaluate_accuracy(
-            model,
-            test_loader,
-            device,
-            cfg,
+        test_acc = evaluate_accuracy(
+            model, test_loader, device, cfg
         )
-        mlflow.log_metric("test_acc", final_acc)
+        mlflow.log_metric("test_acc", test_acc)
 
         if cfg.training.mlflow.log_artifacts:
             torch.save(model.state_dict(), "model.pth")

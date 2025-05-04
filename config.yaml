@@ -11,33 +11,35 @@ data:
 model:
   hidden_dim: 64
   num_layers: 4
-  num_heads: 4
   dropout: 0.1
+  seed: 42
+  gnn_conv_type: null
+  gnn_position: pre
+  type: GraphTransformer
+  num_heads: 4
   use_super_node: false
   ffn_hidden_dim: null
   activation: gelu
-  with_spatial_bias: false
-  num_spatial: 16
-  with_edge_bias: false
-  num_edges: 32
-  with_hop_bias: false
-  num_hops: 8
   with_degree_enc: false
   max_degree: 10
   with_eig_enc: false
   num_eigenc: 6
   with_svd_enc: false
   num_svdenc: 6
-  gnn_conv_type: null
-  gnn_position: pre
+  with_spatial_bias: false
+  num_spatial: 16
+  with_edge_bias: false
+  num_edges: 32
+  with_hop_bias: false
+  num_hops: 8
 training:
-  device: cpu
+  device: cuda
   lr: 0.001
   epochs: 5
   seed: 42
   mlflow:
-    experiment_name: GraphTransformerBenchmark
+    experiment_name: MultiModelBenchmark
     tracking_uri: file:./mlruns
     log_artifacts: true
-    run_name: baseline_MUTAG_h64_l4_test_grads
+    run_name: ${model.type}
     description: null

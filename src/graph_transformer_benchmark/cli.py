@@ -11,15 +11,16 @@ from omegaconf import DictConfig
 
 from graph_transformer_benchmark.train import run_training
 
-# ——————————————————————————————————————————————————————————————————————
-# Suppress the “experimental code” UserWarning from torch_geometric.contrib
 warnings.filterwarnings(
     "ignore",
-    message=".*experimental code and is subject to change.*",
+    message=r".*torch_geometric\.contrib.*",
     category=UserWarning,
-    module="torch_geometric\\.contrib.*",
 )
-# ——————————————————————————————————————————————————————————————————————
+
+warnings.filterwarnings(
+    "ignore",
+    message=r".*acceptable character detection dependency.*",
+)
 
 
 @hydra.main(
@@ -28,12 +29,6 @@ warnings.filterwarnings(
     config_name="default",
 )
 def main(cfg: DictConfig) -> None:
-    """
-    Hydra entrypoint.
-
-    Args:
-        cfg (DictConfig): Merged configuration from configs/default.yaml.
-    """
     run_training(cfg)
 
 

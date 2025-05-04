@@ -1,5 +1,4 @@
-# Pull in the other configs
 defaults:
   - data: data
-  - model: model
+  - model: graph_transformer
   - training: training

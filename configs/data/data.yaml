@@ -1,9 +1,7 @@
-# Data + loader settings
-dataset: MUTAG             # choices: MUTAG, PROTEINS, Cora, CiteSeer, PubMed
+dataset: MUTAG
 batch_size: 32
 num_workers: 4
 
-# Flags for enrich_batch
 with_degree_enc: false
 with_eig_enc: false
 with_svd_enc: false
