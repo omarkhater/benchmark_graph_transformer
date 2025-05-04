@@ -2,11 +2,11 @@
 """
 Model definitions for GraphTransformer Benchmark.
 """
-from typing import Callable, List, Optional
+from typing import Callable
 
-import torch
 import torch.nn as nn
 from omegaconf import DictConfig
+from torch import Tensor
 from torch_geometric.contrib.nn.bias import (
     GraphAttnEdgeBias,
     GraphAttnHopBias,
@@ -18,73 +18,154 @@ from torch_geometric.contrib.nn.positional import (
     EigEncoder,
     SVDEncoder,
 )
-from torch_geometric.nn import GATConv, GCNConv, SAGEConv, global_mean_pool
+from torch_geometric.data import Data
+from torch_geometric.nn import (
+    GATConv,
+    GCNConv,
+    GINConv,
+    SAGEConv,
+    global_mean_pool,
+)
 
 
-class GNNClassifier(nn.Module):
-    """Wrap a single GNN conv layer for whole-graph classification.
-
-    Applies one convolution, global mean pooling, then a linear head.
-    """
+class BaseGNN(nn.Module):
+    """Base graph‐level GNN classifier with optional BatchNorm & residual."""
 
     def __init__(
         self,
-        conv_cls: Callable,
+        conv: nn.Module,
         in_channels: int,
         hidden_dim: int,
         num_classes: int,
+        use_batch_norm: bool,
+        use_residual: bool,
     ) -> None:
         """
         Args:
-            conv_cls (Callable): GNN convolution class (e.g. GCNConv).
-            in_channels (int): Size of input node feature vectors.
-            hidden_dim (int): Hidden dimension for convolution and pool.
-            num_classes (int): Number of target classes.
+            conv: Instantiated GNN convolution module.
+            in_channels: Dimensionality of input node features.
+            hidden_dim: Dimensionality of convolution output.
+            num_classes: Number of graph‐level target classes.
+            use_batch_norm: If True, applies BatchNorm1d after conv.
+            use_residual: If True, adds a skip connection from input to conv.
         """
         super().__init__()
-        self.conv = conv_cls(in_channels, hidden_dim)
+        self.conv = conv
+        if use_batch_norm:
+            self.bn = nn.BatchNorm1d(hidden_dim)
+        else:
+            self.bn = nn.Identity()
+        if use_residual:
+            if in_channels != hidden_dim:
+                self.res_proj = nn.Linear(in_channels, hidden_dim)
+            else:
+                self.res_proj = nn.Identity()
+        else:
+            self.res_proj = None
+
         self.lin = nn.Linear(hidden_dim, num_classes)
+        self.use_residual = use_residual
 
-    def forward(self, data: torch.Tensor) -> torch.Tensor:  # type: ignore
-        """Compute logits for a batch of graphs.
-
+    def forward(self, data: Data) -> Tensor:
+        """
         Args:
             data: A torch_geometric.data.Data object with attributes:
                 - x: [N, in_channels] node features
-                - edge_index: [2, E] edge list
+                - edge_index: [2, E] graph connectivity
                 - batch: [N] batch assignment vector
-
         Returns:
-            Tensor: [batch_size, num_classes] raw logits per graph.
+            Tensor of shape [num_graphs, num_classes], raw logits.
         """
-        x = self.conv(data.x, data.edge_index)
+        x0 = data.x
+        x = self.conv(x0, data.edge_index)
+        x = self.bn(x)
+
+        if self.use_residual and self.res_proj is not None:
+            x = x + self.res_proj(x0)
+
         x = global_mean_pool(x, data.batch)
         return self.lin(x)
 
 
-def _build_graph_transformer(
-    cfg_model: DictConfig, num_features: int, num_classes: int
-) -> GraphTransformer:
-    """Build a GraphTransformer with bias and positional encoders.
+def build_gnn_classifier(
+    conv_cls: Callable[..., nn.Module],
+    in_channels: int,
+    hidden_dim: int,
+    num_classes: int,
+    use_batch_norm: bool,
+    use_residual: bool,
+) -> BaseGNN:
+    """
+    Build a single‐layer GNN classifier.
 
     Args:
-        cfg_model (DictConfig): GraphTransformer-specific hyperparameters.
-        num_features (int): Dimensionality of input node features.
-        num_classes (int): Number of output classes.
-
-    Returns:
-        GraphTransformer: Configured and uninitialized model.
+        conv_cls: GCNConv, SAGEConv, or GATConv class.
+        in_channels: Input feature dimension.
+        hidden_dim: Hidden feature dimension.
+        num_classes: Number of graph‐level classes.
+        use_batch_norm: Whether to apply batch normalization.
+        use_residual: Whether to apply residual connection.
     """
-    # Node feature encoder
+    conv = conv_cls(in_channels, hidden_dim)
+    return BaseGNN(
+        conv,
+        in_channels,
+        hidden_dim,
+        num_classes,
+        use_batch_norm,
+        use_residual
+    )
+
+
+def build_gin_classifier(
+    in_channels: int,
+    hidden_dim: int,
+    num_classes: int,
+    use_batch_norm: bool,
+    use_residual: bool,
+) -> BaseGNN:
+    """
+    Build a 2‐layer GIN classifier.
+
+    Args:
+        in_channels: Input feature dimension.
+        hidden_dim: Hidden feature dimension.
+        num_classes: Number of graph‐level classes.
+        use_batch_norm: Whether to apply batch normalization in MLP after conv.
+        use_residual: Whether to apply residual connection.
+    """
+    mlp = nn.Sequential(
+        nn.Linear(in_channels, hidden_dim),
+        nn.BatchNorm1d(hidden_dim) if use_batch_norm else nn.Identity(),
+        nn.ReLU(),
+        nn.Linear(hidden_dim, hidden_dim),
+        nn.BatchNorm1d(hidden_dim) if use_batch_norm else nn.Identity(),
+        nn.ReLU(),
+    )
+    gin_conv = GINConv(mlp)
+    return BaseGNN(
+        gin_conv,
+        in_channels,
+        hidden_dim,
+        num_classes,
+        use_batch_norm,
+        use_residual
+    )
+
+
+def _build_graph_transformer(
+        cfg_model: DictConfig,
+        num_features: int,
+        num_classes: int
+        ) -> GraphTransformer:
+    """Build a GraphTransformer with bias and positional encoders."""
     encoder = nn.Sequential(
         nn.Linear(num_features, cfg_model.hidden_dim),
         nn.ReLU(),
         nn.LayerNorm(cfg_model.hidden_dim),
         nn.Dropout(cfg_model.dropout),
     )
-
-    # Attention bias providers
-    bias_providers: List[Callable] = []
+    bias_providers = []
     if cfg_model.with_spatial_bias:
         bias_providers.append(
             GraphAttnSpatialBias(
@@ -110,7 +191,7 @@ def _build_graph_transformer(
             )
         )
 
-    pos_encoders: List[Callable] = []
+    pos_encoders = []
     if cfg_model.with_degree_enc:
         pos_encoders.append(
             DegreeEncoder(
@@ -133,17 +214,16 @@ def _build_graph_transformer(
                 hidden_dim=cfg_model.hidden_dim,
             )
         )
-
-    gnn_block: Optional[Callable] = None
+    gnn_block = None
     if cfg_model.gnn_conv_type:
         conv_map = {"gcn": GCNConv, "sage": SAGEConv, "gat": GATConv}
         ConvClass = conv_map[cfg_model.gnn_conv_type]
         conv_layer = ConvClass(cfg_model.hidden_dim, cfg_model.hidden_dim)
 
-        def gnn_hook(data, x):  # noqa: E731
+        def hook(data, x):  # noqa: E731
             return conv_layer(x, data.edge_index)
 
-        gnn_block = gnn_hook
+        gnn_block = hook
 
     return GraphTransformer(
         hidden_dim=cfg_model.hidden_dim,
@@ -165,44 +245,37 @@ def _build_graph_transformer(
 def build_model(
     cfg_model: DictConfig, num_features: int, num_classes: int
 ) -> nn.Module:
-    """Instantiate the model specified in the config.
-
-    Supports GraphTransformer and GCN/SAGE/GAT wrapped by GNNClassifier.
-
-    Args:
-        cfg_model (DictConfig): Includes field `type` specifying model.
-        num_features (int): Input node feature dimension.
-        num_classes (int): Number of output classes.
-
-    Returns:
-        nn.Module: The requested model instance.
-
-    Raises:
-        ValueError: If cfg_model.type is not recognized.
     """
-    model_type = cfg_model.type
-    if model_type == "GraphTransformer":
+    Instantiate the requested model variant.
+
+    Supports GraphTransformer, GCN, SAGE, GAT, and GIN.
+    """
+    t = cfg_model.type.lower()
+    if t == "graphtransformer":
         return _build_graph_transformer(cfg_model, num_features, num_classes)
-    if model_type == "GCN":
-        return GNNClassifier(
-            GCNConv,
-            num_features,
-            cfg_model.hidden_dim,
-            num_classes
+
+    use_bn = bool(getattr(cfg_model, "use_batch_norm", False))
+    use_res = bool(getattr(cfg_model, "use_residual", False))
+
+    if t == "gcn":
+        return build_gnn_classifier(
+            GCNConv, num_features, cfg_model.hidden_dim,
+            num_classes, use_bn, use_res
         )
-    if model_type == "SAGE":
-        return GNNClassifier(
-            SAGEConv,
-            num_features,
-            cfg_model.hidden_dim,
-            num_classes
+    if t == "sage":
+        return build_gnn_classifier(
+            SAGEConv, num_features, cfg_model.hidden_dim,
+            num_classes, use_bn, use_res
         )
-    if model_type == "GAT":
-        return GNNClassifier(
-            GATConv,
-            num_features,
-            cfg_model.hidden_dim,
-            num_classes
+    if t == "gat":
+        return build_gnn_classifier(
+            GATConv, num_features, cfg_model.hidden_dim,
+            num_classes, use_bn, use_res
+        )
+    if t == "gin":
+        return build_gin_classifier(
+            num_features, cfg_model.hidden_dim,
+            num_classes, use_bn, use_res
         )
 
-    raise ValueError(f"Unsupported model type: {model_type}")
+    raise ValueError(f"Unsupported model type: {cfg_model.type}")

@@ -8,7 +8,7 @@ from omegaconf import DictConfig, OmegaConf
 from torch import Tensor
 from torch.nn import Module, Parameter
 from torch.optim import SGD
-from torch_geometric.data import Data
+from torch_geometric.data import Batch, Data
 from torch_geometric.loader import DataLoader
 
 import graph_transformer_benchmark.evaluate as eval_mod
@@ -244,3 +244,48 @@ def patch_training_dependencies(
         lambda path: artifacts.append(path)
     )
     return SimpleNamespace(metrics=metrics, artifacts=artifacts)
+
+
+@pytest.fixture
+def simple_graph() -> Data:
+    """A toy 2‑node graph with an edge between them."""
+    x = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
+    edge_index = torch.tensor([[0, 1], [1, 0]])
+    data = Data(x=x, edge_index=edge_index)
+    data.batch = torch.zeros(x.size(0), dtype=torch.long)
+    return data
+
+
+@pytest.fixture
+def graph_batch(simple_graph: Data) -> Batch:
+    """Batch of two identical graphs, for whole‑graph models."""
+    return Batch.from_data_list([simple_graph, simple_graph])
+
+
+@pytest.fixture
+def cfg_transformer() -> Any:
+    """Minimal DictConfig for GraphTransformer builder."""
+    return OmegaConf.create({
+        "type": "GraphTransformer",
+        "hidden_dim": 8,
+        "num_layers": 2,
+        "num_heads": 2,
+        "dropout": 0.0,
+        "ffn_hidden_dim": None,
+        "activation": "relu",
+        "use_super_node": False,
+        "with_spatial_bias": False,
+        "with_edge_bias": False,
+        "with_hop_bias": False,
+        "with_degree_enc": False,
+        "with_eig_enc": False,
+        "with_svd_enc": False,
+        "gnn_conv_type": None,
+        "gnn_position": "pre",
+        "max_degree": 0,
+        "num_spatial": 0,
+        "num_edges": 0,
+        "num_hops": 0,
+        "num_eigenc": 0,
+        "num_svdenc": 0,
+    })
