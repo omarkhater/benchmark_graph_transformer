@@ -66,10 +66,14 @@ repos:
         name: Lint YAML configs
         args:
           - -d
-          - >
-            {extends: default,
-             rules:
-               document-start: disable,
-               line-length:
-                 level: warning}
+          - |
+            {
+              "extends": "default",
+              "rules": {
+                "document-start": "disable",
+                "line-length": {
+                  "level": "warning"
+                }
+              }
+            }
         files: ^configs/.*\.ya?ml$
