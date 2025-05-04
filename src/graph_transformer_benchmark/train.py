@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
 
 from graph_transformer_benchmark.data import build_dataloaders, enrich_batch
-from graph_transformer_benchmark.evaluate import evaluate_accuracy
+from graph_transformer_benchmark.evaluate import evaluate
 from graph_transformer_benchmark.model import build_model
 from graph_transformer_benchmark.utils import (
     get_device,
@@ -116,14 +116,14 @@ def run_training(cfg: DictConfig) -> None:
             )
             mlflow.log_metric("train_loss", loss, step=epoch)
 
-            val_acc = evaluate_accuracy(
+            val_acc = evaluate(
                 model, test_loader, device, cfg
             )
             mlflow.log_metric("val_acc", val_acc, step=epoch)
 
             log_health_metrics(model, optimizer, epoch)
 
-        test_acc = evaluate_accuracy(
+        test_acc = evaluate(
             model, test_loader, device, cfg
         )
         mlflow.log_metric("test_acc", test_acc)
