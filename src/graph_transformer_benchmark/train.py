@@ -4,7 +4,6 @@ Training pipeline for GraphTransformer benchmarks with reproducible seeding
 and health-metrics logging.
 """
 import random
-from typing import Optional
 
 import mlflow
 import numpy as np
@@ -17,7 +16,7 @@ from tqdm import tqdm, trange
 
 from graph_transformer_benchmark.data import build_dataloaders, enrich_batch
 from graph_transformer_benchmark.evaluate import evaluate
-from graph_transformer_benchmark.model import build_model
+from graph_transformer_benchmark.graph_models import build_model
 from graph_transformer_benchmark.utils import (
     get_device,
     init_mlflow,
@@ -89,10 +88,10 @@ def run_training(cfg: DictConfig) -> None:
     _GLOBAL_SEED = cfg.training.seed
 
     init_mlflow(cfg)
-    run_name: Optional[str] = cfg.training.mlflow.run_name
-    description: Optional[str] = cfg.training.mlflow.description
+    run_name = cfg.training.mlflow.run_name
+    description = cfg.training.mlflow.description
 
-    with mlflow.start_run(run_name=run_name):
+    with mlflow.start_run(run_name=run_name, nested=True):
         if description:
             mlflow.set_tag("mlflow.note.content", description)
         log_config(cfg)
@@ -119,7 +118,7 @@ def run_training(cfg: DictConfig) -> None:
             val_acc = evaluate(
                 model, test_loader, device, cfg
             )
-            mlflow.log_metric("val_acc", val_acc, step=epoch)
+            mlflow.log_metric("val_acc", -val_acc, step=epoch)
 
             log_health_metrics(model, optimizer, epoch)
 
@@ -131,3 +130,5 @@ def run_training(cfg: DictConfig) -> None:
         if cfg.training.mlflow.log_artifacts:
             torch.save(model.state_dict(), "model.pth")
             mlflow.log_artifact("model.pth")
+
+        return -val_acc

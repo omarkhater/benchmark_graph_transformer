@@ -6,11 +6,6 @@ Loads configuration via Hydra and invokes the training pipeline.
 
 import warnings
 
-import hydra
-from omegaconf import DictConfig
-
-from graph_transformer_benchmark.train import run_training
-
 warnings.filterwarnings(
     "ignore",
     message=r".*torch_geometric\.contrib.*",
@@ -21,6 +16,10 @@ warnings.filterwarnings(
     "ignore",
     message=r".*acceptable character detection dependency.*",
 )
+import hydra  # noqa: E402
+from omegaconf import DictConfig  # noqa: E402
+
+from graph_transformer_benchmark.train import run_training  # noqa: E402
 
 
 @hydra.main(
@@ -29,7 +28,10 @@ warnings.filterwarnings(
     config_name="default",
 )
 def main(cfg: DictConfig) -> None:
-    run_training(cfg)
+    try:
+        run_training(cfg)
+    except Exception:
+        return float("inf")
 
 
 if __name__ == "__main__":

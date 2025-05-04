@@ -39,7 +39,6 @@ def build_graph_transformer(
     Returns:
         GraphTransformer: Instantiated transformer model.
     """
-    # Feature encoder
     encoder = nn.Sequential(
         nn.Linear(num_features, cfg.hidden_dim),
         nn.ReLU(),
@@ -47,7 +46,7 @@ def build_graph_transformer(
         nn.Dropout(cfg.dropout),
     )
     biases = []
-    if cfg.with_spatial_bias:
+    if cfg.get("with_spatial_bias", None):
         biases.append(
             GraphAttnSpatialBias(
                 num_heads=cfg.num_heads,
@@ -55,7 +54,7 @@ def build_graph_transformer(
                 use_super_node=cfg.use_super_node,
             )
         )
-    if cfg.with_edge_bias:
+    if cfg.get("with_edge_bias", None):
         biases.append(
             GraphAttnEdgeBias(
                 num_heads=cfg.num_heads,
@@ -63,7 +62,7 @@ def build_graph_transformer(
                 use_super_node=cfg.use_super_node,
             )
         )
-    if cfg.with_hop_bias:
+    if cfg.get("with_hop_bias", None):
         biases.append(
             GraphAttnHopBias(
                 num_heads=cfg.num_heads,
@@ -73,16 +72,16 @@ def build_graph_transformer(
         )
 
     encoders = []
-    if cfg.with_degree_enc:
+    if cfg.get("with_degree_enc", None):
         encoders.append(
             DegreeEncoder(cfg.max_degree, cfg.max_degree, cfg.hidden_dim))
-    if cfg.with_eig_enc:
+    if cfg.get("with_eigenc", None):
         encoders.append(EigEncoder(cfg.num_eigenc, cfg.hidden_dim))
-    if cfg.with_svd_enc:
+    if cfg.get("with_svdenc", None):
         encoders.append(SVDEncoder(cfg.num_svdenc, cfg.hidden_dim))
 
     gnn_block = None
-    if cfg.gnn_conv_type:
+    if cfg.get("gnn_conv_type", None) is not None:
         from torch_geometric.nn import GATConv, GCNConv, SAGEConv
         conv_map = {"gcn": GCNConv, "sage": SAGEConv, "gat": GATConv}
         layer = conv_map[cfg.gnn_conv_type](cfg.hidden_dim, cfg.hidden_dim)
@@ -95,17 +94,17 @@ def build_graph_transformer(
     return GraphTransformer(
         hidden_dim=cfg.hidden_dim,
         num_class=num_classes,
-        use_super_node=cfg.use_super_node,
+        use_super_node=cfg.get("use_super_node", False),
         node_feature_encoder=encoder,
-        num_encoder_layers=cfg.num_layers,
-        num_heads=cfg.num_heads,
+        num_encoder_layers=cfg.get("num_layers", 1),
+        num_heads=cfg.get("num_heads", None),
         dropout=cfg.dropout,
-        ffn_hidden_dim=cfg.ffn_hidden_dim,
-        activation=cfg.activation,
+        ffn_hidden_dim=cfg.get("ffn_hidden_dim", None),
+        activation=cfg.get("activation", "gelu"),
         attn_bias_providers=biases,
         positional_encoders=encoders,
         gnn_block=gnn_block,
-        gnn_position=cfg.gnn_position,
+        gnn_position=cfg.get("gnn_position", "pre"),
     )
 
 
