@@ -127,16 +127,36 @@ def graph_loader() -> DataLoader:
 @pytest.fixture
 def node_loader() -> DataLoader:
     """Provide a DataLoader for a single graph with 4 nodes [0,1,0,1]."""
+
     labels = torch.tensor([0, 1, 0, 1]).unsqueeze(1)
-    graph = Data(x=torch.randn(4, 4), y=labels)
+    edge_index = torch.tensor(
+        [
+            [0, 1, 2, 3],   # “chain” or self‑loops, etc.
+            [1, 2, 3, 0]
+        ],  # here we connect 0→1,1→2,2→3,3→0
+        dtype=torch.long)
+    graph = Data(
+        x=torch.randn(4, 4),
+        y=labels,
+        edge_index=edge_index
+        )
     return DataLoader([graph], batch_size=1)
 
 
 @pytest.fixture
 def generic_loader() -> DataLoader:
     """Provide DataLoader for generic graph classification with 1D targets."""
-    g0 = Data(x=torch.randn(1, 4), y=torch.tensor(0))
-    g1 = Data(x=torch.randn(1, 4), y=torch.tensor(1))
+    # two singleton graphs, each with a self‑loop edge:
+    g0 = Data(
+        x=torch.randn(1, 4),
+        y=torch.tensor(0),
+        edge_index=torch.tensor([[0], [0]], dtype=torch.long),
+    )
+    g1 = Data(
+        x=torch.randn(1, 4),
+        y=torch.tensor(1),
+        edge_index=torch.tensor([[0], [0]], dtype=torch.long),
+    )
     return DataLoader([g0, g1], batch_size=2)
 
 
@@ -251,9 +271,15 @@ def simple_graph() -> Data:
     """A toy 2‑node graph with an edge between them."""
     x = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
     edge_index = torch.tensor([[0, 1], [1, 0]])
-    data = Data(x=x, edge_index=edge_index)
+    # give it a graph‐level label (e.g. class 0)
+    data = Data(x=x, edge_index=edge_index, y=torch.tensor([0]))
     data.batch = torch.zeros(x.size(0), dtype=torch.long)
     return data
+
+
+@pytest.fixture
+def simple_batch(simple_graph: Data) -> Batch:
+    return Batch.from_data_list([simple_graph, simple_graph])
 
 
 @pytest.fixture
