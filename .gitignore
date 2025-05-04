@@ -24,3 +24,5 @@ checkpoints/
 /outputs
 summary_commands.md
 /multirun
+/data
+.coverage
