@@ -1,0 +1,12 @@
+device: cpu
+lr: 1e-3
+epochs: 3
+seed: 42
+n_trials: 10 # Number of Optuna trials
+
+mlflow:
+  experiment_name: GraphTransformerBenchmark
+  tracking_uri: file:./mlruns
+  log_artifacts: true
+  run_name: "${model.type}"
+  description: null

@@ -1,0 +1,9 @@
+defaults:
+  - _self_
+  - transformer
+
+with_degree_enc: true
+with_eig_enc: true
+with_svd_enc: true
+task: graph
+type: GraphTransformer

@@ -1,0 +1,5 @@
+defaults:
+  - common
+
+type: GIN
+# GIN uses the same hidden_dim, batch_norm and residual flags

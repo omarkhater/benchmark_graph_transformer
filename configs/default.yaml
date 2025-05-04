@@ -1,4 +1,15 @@
+# configs/default.yaml
+
+# 1) Select which data, model and training config to use by default.
 defaults:
-  - data: data
-  - model: graph_transformer
-  - training: training
+  - _self_
+  - data: data           # loads configs/data/data.yaml
+  - model: transformer   # loads configs/model/transformer.yaml
+  - training: default    # loads configs/training/default.yaml
+
+# 2) (Optional) Hydra runtime settings
+hydra:
+  run:
+    dir: runs/${hydra.job.name}/${now:%Y-%m-%d_%H-%M-%S}
+  sweep:
+    dir: multirun/${hydra.job.name}/${now:%Y-%m-%d_%H-%M-%S}
