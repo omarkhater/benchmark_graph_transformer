@@ -1,0 +1,12 @@
+# Training & MLflow settings
+device: cpu             # or "cpu"
+lr: 1e-3
+epochs: 5
+seed: 42
+
+mlflow:
+  experiment_name: GraphTransformerBenchmark
+  tracking_uri: file:./mlruns
+  log_artifacts: true
+  run_name: null
+  description: null

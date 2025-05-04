@@ -1,0 +1,5 @@
+# Pull in the other configs
+defaults:
+  - data: data
+  - model: model
+  - training: training
