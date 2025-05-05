@@ -1,13 +1,18 @@
 defaults:
-  - _self_
   - transformer
 
-with_spatial_bias: true
-with_edge_bias: true
-with_hop_bias: true
+with_spatial_bias: false
+with_edge_bias: false
+with_hop_bias: false
+with_degree_enc: false
+with_eig_enc: false
+with_svd_enc: false
+max_degree: 32
+num_eigenc: 8
+num_svdenc: 8
+num_spatial: 32
+num_edges: 16
+num_hops: 5
 
-with_degree_enc: true
-with_eig_enc: true
-with_svd_enc: true
 task: graph
 type: GraphTransformer

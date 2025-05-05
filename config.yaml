@@ -1,5 +1,5 @@
 data:
-  dataset: Cora
+  dataset: CORA
   batch_size: 32
   num_workers: 4
   with_degree_enc: false
@@ -9,10 +9,6 @@ data:
   with_edge_bias: false
   with_hop_bias: false
 model:
-  with_spatial_bias: false
-  with_edge_bias: false
-  with_hop_bias: false
-  task: node
   type: GraphTransformer
   activation: gelu
   ffn_hidden_dim: null
@@ -24,25 +20,29 @@ model:
   seed: 42
   gnn_conv_type: null
   gnn_position: pre
-  with_degree_enc: false
-  max_degree: 0
-  with_eig_enc: false
-  num_eigenc: 0
-  with_svd_enc: false
-  num_svdenc: 0
-  num_spatial: 0
-  num_edges: 0
-  num_hops: 0
+  max_degree: 32
+  num_eigenc: 8
+  num_svdenc: 8
+  num_spatial: 32
+  num_edges: 16
+  num_hops: 5
   use_batch_norm: false
   use_residual: false
+  with_spatial_bias: false
+  with_edge_bias: false
+  with_hop_bias: false
+  with_degree_enc: false
+  with_eig_enc: false
+  with_svd_enc: false
+  task: node
 training:
   device: cpu
   lr: 0.001
-  epochs: 3
+  epochs: 15
   seed: 42
-  n_trials: 3
+  n_trials: 10
   mlflow:
-    experiment_name: sweep_Cora
+    experiment_name: CORA_Initial_Benchmark_fixed
     tracking_uri: file:./mlruns
     log_artifacts: true
     run_name: ${model.type}

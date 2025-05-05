@@ -2,4 +2,5 @@ defaults:
   - common
 
 type: GIN
+task: graph
 # GIN uses the same hidden_dim, batch_norm and residual flags

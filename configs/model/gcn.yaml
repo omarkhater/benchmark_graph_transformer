@@ -3,3 +3,4 @@ defaults:
   - common
 
 type: GCN
+task: graph

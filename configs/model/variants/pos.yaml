@@ -1,5 +1,4 @@
 defaults:
-  - _self_
   - transformer
 
 with_degree_enc: true

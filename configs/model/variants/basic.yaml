@@ -1,6 +1,5 @@
 # configs/model/variants/basic.yaml
 defaults:
-  - _self_
   - transformer
 
 task: graph

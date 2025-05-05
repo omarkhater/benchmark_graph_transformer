@@ -2,3 +2,4 @@ defaults:
   - common
 
 type: SAGE
+task: graph

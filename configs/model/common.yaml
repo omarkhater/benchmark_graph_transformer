@@ -10,18 +10,11 @@ gnn_conv_type: null
 gnn_position: pre
 
 # GraphTransformer flags
-with_degree_enc: false
 max_degree: 0
-with_eig_enc: false
 num_eigenc: 0
-with_svd_enc: false
 num_svdenc: 0
-
-with_spatial_bias: false
 num_spatial: 0
-with_edge_bias: false
 num_edges: 0
-with_hop_bias: false
 num_hops: 0
 
 # GCN‐only extras (for HPO)
