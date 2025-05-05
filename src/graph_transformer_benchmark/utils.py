@@ -4,7 +4,7 @@ Utility functions for MLflow setup and config logging.
 """
 import random
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict
 
 import mlflow
 import numpy as np
@@ -24,20 +24,46 @@ def init_mlflow(cfg: DictConfig) -> None:
     mlflow.set_experiment(cfg.training.mlflow.experiment_name)
 
 
+def _flatten_cfg(section: DictConfig | Dict[str, Any],
+                 prefix: str = "") -> Dict[str, Any]:
+    """
+    Recursively flatten a DictConfig (or plain dict).
+
+    Each leaf key becomes "<prefix>key[.subkey...]" so that
+    all parameter names are globally unique.
+    """
+    flat = {}
+    for k, v in section.items():
+        full_key = f"{prefix}{k}"
+        if isinstance(v, (DictConfig, dict)):
+            flat.update(_flatten_cfg(v, prefix=f"{full_key}."))
+        else:
+            if hasattr(v, "item"):
+                v = v.item()
+            flat[full_key] = v
+    return flat
+
+
 def log_config(cfg: DictConfig) -> None:
     """
-    Log config parameters to MLflow and save merged config file.
+    Log *all* run‑time configuration parameters to MLflow with
+    unique keys and store the merged config file as an artifact.
 
     Args:
         cfg (DictConfig): Full merged run configuration.
     """
-    mlflow.log_params(dict(cfg.data))
-    mlflow.log_params(dict(cfg.model))
-    mlflow.log_params(dict(cfg.training))
+    # 1. Build a single flattened param dict
+    params = {}
+    for section_name in ("data", "model", "training"):
+        if section_name in cfg:
+            params.update(_flatten_cfg(cfg[section_name],
+                                       prefix=f"{section_name}."))
+
+    mlflow.log_params(params)
 
     config_path = Path("config.yaml")
-    OmegaConf.save(config=cfg, f=config_path.as_posix())
-    mlflow.log_artifact(config_path.as_posix())
+    OmegaConf.save(config=cfg, f=config_path)
+    mlflow.log_artifact(str(config_path))
 
 
 def set_seed(seed: int) -> None:

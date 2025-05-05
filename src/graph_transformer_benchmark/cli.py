@@ -28,10 +28,7 @@ from graph_transformer_benchmark.train import run_training  # noqa: E402
     config_name="default",
 )
 def main(cfg: DictConfig) -> None:
-    try:
-        run_training(cfg)
-    except Exception:
-        return float("inf")
+    run_training(cfg)
 
 
 if __name__ == "__main__":
