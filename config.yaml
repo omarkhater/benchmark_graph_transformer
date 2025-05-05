@@ -1,0 +1,49 @@
+data:
+  dataset: CORA
+  batch_size: 32
+  num_workers: 4
+  with_degree_enc: false
+  with_eig_enc: false
+  with_svd_enc: false
+  with_spatial_bias: false
+  with_edge_bias: false
+  with_hop_bias: false
+model:
+  type: GraphTransformer
+  activation: gelu
+  ffn_hidden_dim: null
+  use_super_node: false
+  hidden_dim: 64
+  num_heads: 4
+  num_layers: 4
+  dropout: 0.1
+  seed: 42
+  gnn_conv_type: null
+  gnn_position: pre
+  max_degree: 32
+  num_eigenc: 8
+  num_svdenc: 8
+  num_spatial: 32
+  num_edges: 16
+  num_hops: 5
+  use_batch_norm: false
+  use_residual: false
+  with_spatial_bias: false
+  with_edge_bias: false
+  with_hop_bias: false
+  with_degree_enc: false
+  with_eig_enc: false
+  with_svd_enc: false
+  task: node
+training:
+  device: cpu
+  lr: 0.001
+  epochs: 15
+  seed: 42
+  n_trials: 10
+  mlflow:
+    experiment_name: CORA_Initial_Benchmark_fixed
+    tracking_uri: file:./mlruns
+    log_artifacts: true
+    run_name: ${model.type}
+    description: null

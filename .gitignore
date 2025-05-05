@@ -20,3 +20,10 @@ checkpoints/
 
 # Logs
 *.log
+/data/TUD
+/outputs
+summary_commands.md
+/multirun
+/data
+.coverage
+/runs

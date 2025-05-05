@@ -1,0 +1,88 @@
+hydra:
+  sweep:
+    # output dir for multirun results
+    dir: multirun/${hydra.job.name}/${hydra.job.num}
+  sweeper:
+    # Use Hydra‑Optuna TPE sweeper
+    _target_: hydra_plugins.hydra_optuna_sweeper.optuna_sweeper.OptunaSweeper
+
+    # How many Optuna trials to run (override via training.n_trials if desired)
+    n_trials: ${training.n_trials:10}
+    n_jobs: ${training.n_jobs:1}    # Number of parallel jobs to run
+
+    # Which metric to optimize and in which direction
+    metric:
+      name: val_acc
+      goal: minimize # In hydra-optuna-sweeper 1.2.0, no support for maximize yet
+
+    # Sampler settings
+    sampler:
+      _target_: optuna.samplers.TPESampler
+      seed: ${training.seed}
+
+    # Hyperparameter search space
+    param_distributions:
+
+      # Shared model hyperparameters
+      model.hidden_dim:
+        _target_: optuna.distributions.IntUniformDistribution
+        low: 32
+        high: 256
+        step: 32
+
+      model.num_layers:
+        _target_: optuna.distributions.IntUniformDistribution
+        low: 1
+        high: 8
+
+      model.use_batch_norm:
+        _target_: optuna.distributions.CategoricalDistribution
+        choices: [false, true]
+
+      model.use_residual:
+        _target_: optuna.distributions.CategoricalDistribution
+        choices: [false, true]
+
+      # Transformer‐only hyperparameters
+      model.num_heads:
+        _target_: optuna.distributions.IntUniformDistribution
+        low: 1
+        high: 8
+
+      model.ffn_hidden_dim:
+        _target_: optuna.distributions.IntUniformDistribution
+        low: 64
+        high: 512
+        step: 64
+
+      # Bias‐only / Full variants
+      model.num_spatial:
+        _target_: optuna.distributions.IntUniformDistribution
+        low: 0
+        high: 32
+        step: 4
+
+      model.num_edges:
+        _target_: optuna.distributions.IntUniformDistribution
+        low: 0
+        high: 32
+        step: 4
+
+      model.num_hops:
+        _target_: optuna.distributions.IntUniformDistribution
+        low: 0
+        high: 16
+        step: 2
+
+      # Positional‐only / Full variants
+      model.num_eigenc:
+        _target_: optuna.distributions.IntUniformDistribution
+        low: 0
+        high: 10
+        step: 2
+
+      model.num_svdenc:
+        _target_: optuna.distributions.IntUniformDistribution
+        low: 0
+        high: 10
+        step: 2

@@ -1,0 +1,10 @@
+# configs/model/variants/gnn.yaml
+defaults:
+  - _self_
+  - gcn  # or point to a base conv of your choice
+
+# no transformer flags; uses only the GNN
+use_batch_norm: true
+use_residual: true
+task: node
+type: SAGE

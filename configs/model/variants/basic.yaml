@@ -1,0 +1,6 @@
+# configs/model/variants/basic.yaml
+defaults:
+  - transformer
+
+task: graph
+type: GraphTransformer

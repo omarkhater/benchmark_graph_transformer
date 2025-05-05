@@ -1,0 +1,6 @@
+# configs/model/gcn.yaml
+defaults:
+  - common
+
+type: GCN
+task: graph

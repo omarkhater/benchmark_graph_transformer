@@ -1,0 +1,8 @@
+defaults:
+  - transformer
+
+with_spatial_bias: true
+with_edge_bias: true
+with_hop_bias: true
+task: graph
+type: GraphTransformer

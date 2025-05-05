@@ -1,0 +1,22 @@
+# configs/model/common.yaml
+hidden_dim: 64
+num_heads: 4
+num_layers: 4
+dropout: 0.1
+seed: 42
+
+# GNN hook
+gnn_conv_type: null
+gnn_position: pre
+
+# GraphTransformer flags
+max_degree: 0
+num_eigenc: 0
+num_svdenc: 0
+num_spatial: 0
+num_edges: 0
+num_hops: 0
+
+# GCN‐only extras (for HPO)
+use_batch_norm: false
+use_residual: false

@@ -1,0 +1,5 @@
+defaults:
+  - common
+
+type: GAT
+task: graph
