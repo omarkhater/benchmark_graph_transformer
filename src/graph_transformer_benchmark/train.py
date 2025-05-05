@@ -40,6 +40,48 @@ def worker_init_fn(worker_id: int) -> None:
     np.random.seed(seed)
 
 
+def _infer_num_node_features(loader: DataLoader) -> int:
+    """
+    Infer the number of input features per node from a DataLoader.
+
+    Tries, in order:
+    1. loader.dataset.num_node_features
+    2. loader.dataset.dataset.num_node_features (if Subset)
+    3. batch.x.size(-1) from first batch
+    """
+    ds = loader.dataset
+    if hasattr(ds, "num_node_features"):
+        return ds.num_node_features  # type: ignore[attr-defined]
+    ds_under = getattr(ds, "dataset", None)
+    if hasattr(ds_under, "num_node_features"):
+        return ds_under.num_node_features  # type: ignore[attr-defined]
+    first_batch = next(iter(loader))
+    return int(first_batch.x.size(-1))
+
+
+def _infer_num_classes(loader: DataLoader) -> int:
+    """
+    Infer the number of target classes from a DataLoader.
+
+    Tries, in order:
+    1. loader.dataset.num_classes
+    2. loader.dataset.dataset.num_classes (if Subset)
+    3. y.max().item() + 1 from first batch
+    """
+    ds = loader.dataset
+    if hasattr(ds, "num_classes"):
+        return ds.num_classes  # type: ignore[attr-defined]
+    ds_under = getattr(ds, "dataset", None)
+    if hasattr(ds_under, "num_classes"):
+        return ds_under.num_classes  # type: ignore[attr-defined]
+    first_batch = next(iter(loader))
+    y = first_batch.y
+    if y.dim() > 1:
+        # e.g. one-hot or multi-task
+        return int(y.size(-1))
+    return int(y.max().item() + 1)
+
+
 def train_one_epoch(
     model: nn.Module,
     loader: DataLoader,
@@ -66,7 +108,7 @@ def train_one_epoch(
     total_loss = 0.0
     for batch in tqdm(loader, desc=f"Train Epoch {epoch}", leave=False):
         batch = batch.to(device)
-        batch = enrich_batch(batch, cfg.data)
+        batch = enrich_batch(batch, cfg.model)
         optimizer.zero_grad()
         outputs = model(batch)
         loss = F.cross_entropy(outputs, batch.y)
@@ -95,15 +137,14 @@ def run_training(cfg: DictConfig) -> None:
         if description:
             mlflow.set_tag("mlflow.note.content", description)
         log_config(cfg)
-
         generator = torch.Generator().manual_seed(cfg.training.seed)
-        train_loader, test_loader = build_dataloaders(
+        train_loader, val_loader, test_loader = build_dataloaders(
             cfg, generator=generator, worker_init_fn=worker_init_fn
         )
 
         device = get_device(cfg.training.device)
-        num_feat = train_loader.dataset.num_node_features
-        num_cls = train_loader.dataset.num_classes
+        num_feat = _infer_num_node_features(train_loader)
+        num_cls = _infer_num_classes(train_loader)
         model = build_model(cfg.model, num_feat, num_cls).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=cfg.training.lr)
 
@@ -116,9 +157,9 @@ def run_training(cfg: DictConfig) -> None:
             mlflow.log_metric("train_loss", loss, step=epoch)
 
             val_acc = evaluate(
-                model, test_loader, device, cfg
+                model, val_loader, device, cfg
             )
-            mlflow.log_metric("val_acc", -val_acc, step=epoch)
+            mlflow.log_metric("val_acc", val_acc, step=epoch)
 
             log_health_metrics(model, optimizer, epoch)
 
@@ -131,4 +172,4 @@ def run_training(cfg: DictConfig) -> None:
             torch.save(model.state_dict(), "model.pth")
             mlflow.log_artifact("model.pth")
 
-        return -val_acc
+        return val_acc
