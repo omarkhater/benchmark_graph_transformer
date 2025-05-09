@@ -108,7 +108,8 @@ def train_one_epoch(
     total_loss = 0.0
     for batch in tqdm(loader, desc=f"Train Epoch {epoch}", leave=False):
         batch = batch.to(device)
-        batch = enrich_batch(batch, cfg.model)
+        model_cfg = cfg.get("model", {})
+        batch = enrich_batch(batch, model_cfg)
         optimizer.zero_grad()
         outputs = model(batch)
         loss = F.cross_entropy(outputs, batch.y)
