@@ -6,8 +6,13 @@ import pytest
 import torch
 import torch.nn.functional as F
 from omegaconf import OmegaConf
+from torch.utils.data import Subset
+from torch_geometric.data import Data
+from torch_geometric.loader import DataLoader
 
 from graph_transformer_benchmark.train import (
+    _infer_num_classes,
+    _infer_num_node_features,
     run_training,
     train_one_epoch,
     worker_init_fn,
@@ -109,3 +114,68 @@ def test_run_training_artifacts(
     )
     run_training(cfg)
     assert patch_training_dependencies.artifacts == ["model.pth"]
+
+# ----------------------------------------------------------------------
+# Tests for _infer_num_node_features
+# ----------------------------------------------------------------------
+
+
+class DummyDataset(list):
+    """Simple dataset wrapping a list with metadata attributes"""
+
+
+def test_infer_num_node_features_from_dataset_attr():
+    data = Data(x=torch.randn(2, 7), y=torch.tensor([0, 1]))
+    ds = DummyDataset([data])
+    ds.num_node_features = 7
+    loader = DataLoader(ds, batch_size=1)
+    assert _infer_num_node_features(loader) == 7
+
+
+def test_infer_num_node_features_from_subset_attr():
+    data = Data(x=torch.randn(3, 5), y=torch.tensor([0, 1, 2]))
+    ds = DummyDataset([data])
+    ds.num_node_features = 5
+    subset = Subset(ds, [0])
+    loader = DataLoader(subset, batch_size=1)
+    assert _infer_num_node_features(loader) == 5
+
+
+def test_infer_num_node_features_from_batch():
+    data = Data(x=torch.randn(4, 9), y=torch.tensor([0, 1, 2, 3]))
+    loader = DataLoader([data], batch_size=1)
+    assert _infer_num_node_features(loader) == 9
+
+
+# ----------------------------------------------------------------------
+# Tests for _infer_num_classes
+# ----------------------------------------------------------------------
+
+def test_infer_num_classes_from_dataset_attr():
+    data = Data(x=torch.randn(2, 4), y=torch.tensor([0, 1]))
+    ds = DummyDataset([data])
+    ds.num_classes = 4
+    loader = DataLoader(ds, batch_size=1)
+    assert _infer_num_classes(loader) == 4
+
+
+def test_infer_num_classes_from_subset_attr():
+    data = Data(x=torch.randn(3, 3), y=torch.tensor([0, 2, 1]))
+    ds = DummyDataset([data])
+    ds.num_classes = 3
+    subset = Subset(ds, [0])
+    loader = DataLoader(subset, batch_size=1)
+    assert _infer_num_classes(loader) == 3
+
+
+def test_infer_num_classes_from_batch_scalar_labels():
+    data = Data(x=torch.randn(2, 6), y=torch.tensor([0, 2]))
+    loader = DataLoader([data], batch_size=1)
+    assert _infer_num_classes(loader) == 3
+
+
+def test_infer_num_classes_from_batch_one_hot_labels():
+    one_hot = torch.eye(5)
+    data = Data(x=torch.randn(5, 5), y=one_hot)
+    loader = DataLoader([data], batch_size=1)
+    assert _infer_num_classes(loader) == 5
