@@ -14,6 +14,8 @@ from sklearn.metrics import f1_score, mean_squared_error, r2_score
 from torch import nn
 from torch_geometric.loader import DataLoader
 
+from .classification_metrics import compute_generic_classification
+
 
 def collect_predictions(
     model: nn.Module,
@@ -53,12 +55,15 @@ def collect_predictions(
             labels = batch.y.reshape(-1) if batch.y.ndim > 1 else batch.y
 
             all_true.append(labels.cpu().numpy())
-            all_pred.append(logits.detach().cpu().numpy())
+            all_pred.append(logits.cpu().numpy())
 
-    return (
-        np.concatenate(all_true),
-        np.concatenate(all_pred)
-    )
+    y_true = np.concatenate(all_true)
+    y_pred = np.concatenate(all_pred)
+
+    if y_pred.ndim == 2 and y_pred.shape[1] == 1:
+        y_pred = y_pred.reshape(-1)
+
+    return y_true, y_pred
 
 
 def compute_classification_metrics(
@@ -181,11 +186,14 @@ def compute_node_metrics(
     Dict[str, float]
         Dictionary containing accuracy and macro-F1 scores
     """
-    evaluator = NodeEvaluator(name=dataset_name)
     y_true, y_pred = collect_predictions(model, loader, device)
+    if not dataset_name.startswith("ogbn"):
+        return compute_generic_classification(
+            y_true, y_pred, is_multiclass=True)
+
+    evaluator = NodeEvaluator(name=dataset_name)
     preds = y_pred.argmax(axis=-1) if y_pred.ndim > 1 else y_pred
     result = evaluator.eval({"y_true": y_true, "y_pred": preds})
-
     return {
         "accuracy": result["acc"],
         "macro_f1": result.get("macro_f1", 0.0)

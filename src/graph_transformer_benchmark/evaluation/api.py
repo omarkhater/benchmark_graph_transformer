@@ -7,6 +7,7 @@ from torch_geometric.loader import DataLoader
 
 from .metrics import (
     collect_predictions,
+    compute_classification_metrics,
     compute_graph_metrics,
     compute_node_metrics,
     compute_regression_metrics,
@@ -21,44 +22,22 @@ def evaluate(
     device: torch.device,
     cfg: DictConfig,
 ) -> dict[str, float]:
-    """Evaluate model performance with appropriate metrics.
-
-    Parameters
-    ----------
-    model : nn.Module
-        Model to evaluate
-    loader : DataLoader
-        DataLoader containing validation/test data
-    device : torch.device
-        Device to run inference on
-    cfg : DictConfig
-        Configuration containing dataset information
-
-    Returns
-    -------
-    dict[str, float]
-        Dictionary of computed metrics:
-        - Graph classification: accuracy, ROC-AUC, macro-F1
-        - Node classification: accuracy, macro-F1
-        - Graph regression: MSE, RMSE, MAE, R²
-        - Node regression: MSE, RMSE, MAE, R²
-
-    Raises
-    ------
-    ValueError
-        If loader type is unsupported
-    """
+    """Evaluate model performance with appropriate metrics."""
     if not isinstance(loader, DataLoader):
         raise ValueError(f"Unsupported loader type: {type(loader)}")
 
     task = detect_task_type(loader)
     predictions = collect_predictions(model, loader, device)
+    y_true, y_pred = predictions
+    dataset_name = cfg.data.dataset
 
-    if task == TaskType.GRAPH_CLASSIFICATION:
-        return compute_graph_metrics(model, loader, device, cfg.data.dataset)
-    if task == TaskType.NODE_CLASSIFICATION:
-        return compute_node_metrics(model, loader, device, cfg.data.dataset)
     if task in (TaskType.GRAPH_REGRESSION, TaskType.NODE_REGRESSION):
-        return compute_regression_metrics(predictions)
+        return compute_regression_metrics(y_true, y_pred)
 
-    raise ValueError(f"Unsupported task type: {task}")
+    if dataset_name.startswith('ogb'):
+        if task == TaskType.GRAPH_CLASSIFICATION:
+            return compute_graph_metrics(model, loader, device, dataset_name)
+        if task == TaskType.NODE_CLASSIFICATION:
+            return compute_node_metrics(model, loader, device, dataset_name)
+
+    return compute_classification_metrics(y_true, y_pred)

@@ -17,6 +17,10 @@ def test_detect_node_classification(node_loader):
 
 def test_detect_graph_classification(graph_loader):
     """Should detect graph-level classification task."""
+    # Convert targets to int64 to indicate classification
+    for data in graph_loader.dataset:
+        data.y = data.y.to(torch.int64)
+
     task = detect_task_type(graph_loader)
     assert task == TaskType.GRAPH_CLASSIFICATION
 

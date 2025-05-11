@@ -6,21 +6,21 @@ from graph_transformer_benchmark.evaluation import evaluate
 
 
 class DummyModel(nn.Module):
-    """Model that returns zeros of appropriate shape."""
-    def __init__(self, is_regression: bool = False):
+    """Model that returns predictions simulating a real model."""
+    def __init__(self, pred_dim: int = 1):
         super().__init__()
-        self.is_regression = is_regression
+        self.pred_dim = pred_dim
 
     def forward(self, batch):
-        if self.is_regression:
-            return torch.zeros(batch.num_nodes)
-        return torch.zeros((batch.num_nodes, 2))
+        num_items = batch.num_nodes
+        return torch.randn(num_items, self.pred_dim)
 
 
 def test_evaluate_returns_classification_metrics(
     node_loader, device, cfg_generic
 ):
-    model = DummyModel(is_regression=False)
+    """Test classification metrics for discrete targets."""
+    model = DummyModel(pred_dim=2)
     metrics = evaluate(model, node_loader, device, cfg_generic)
 
     assert isinstance(metrics, dict)
@@ -35,7 +35,8 @@ def test_evaluate_returns_classification_metrics(
 def test_evaluate_returns_regression_metrics(
     regression_loader, device, cfg_generic
 ):
-    model = DummyModel(is_regression=True)
+    """Test regression metrics for continuous targets."""
+    model = DummyModel(pred_dim=1)
     metrics = evaluate(model, regression_loader, device, cfg_generic)
 
     assert isinstance(metrics, dict)
@@ -45,7 +46,11 @@ def test_evaluate_returns_regression_metrics(
 
 def test_evaluate_graph_regression(graph_loader, device, cfg_generic):
     """Should compute regression metrics for graph-level targets."""
-    model = DummyModel(is_regression=True)
+    # Verify we're working with float targets
+    assert all(data.y.dtype == torch.float32 for data in graph_loader.dataset)
+    assert all(len(data.y) == 1 for data in graph_loader.dataset)
+
+    model = DummyModel(pred_dim=1)
     metrics = evaluate(model, graph_loader, device, cfg_generic)
 
     assert isinstance(metrics, dict)
@@ -55,7 +60,7 @@ def test_evaluate_graph_regression(graph_loader, device, cfg_generic):
 
 def test_evaluate_node_regression(regression_loader, device, cfg_generic):
     """Should compute regression metrics for node-level targets."""
-    model = DummyModel(is_regression=True)
+    model = DummyModel(pred_dim=1)
     metrics = evaluate(model, regression_loader, device, cfg_generic)
 
     assert isinstance(metrics, dict)
@@ -72,3 +77,13 @@ def test_unsupported_loader_type():
             device=torch.device("cpu"),
             cfg={"data": {"dataset": "test"}}
         )
+
+
+def test_predictions_match_targets(node_loader, device, cfg_generic):
+    """Verify predictions and targets have compatible shapes."""
+    model = DummyModel(pred_dim=2)
+    metrics = evaluate(model, node_loader, device, cfg_generic)
+
+    batch = next(iter(node_loader))
+    assert model(batch).shape[-1] == 2
+    assert isinstance(metrics["accuracy"], float)

@@ -121,9 +121,9 @@ def ensure_model_has_parameter(dummy_model: DummyModel) -> None:
 
 @pytest.fixture
 def graph_loader() -> DataLoader:
-    """Provide a DataLoader for two graph‐level samples with labels [0],[1]."""
-    d0 = Data(x=torch.randn(1, 4), y=torch.tensor([[0]]))
-    d1 = Data(x=torch.randn(1, 4), y=torch.tensor([[1]]))
+    """Provide a DataLoader for two graph‐level samples with float targets."""
+    d0 = Data(x=torch.randn(1, 4), y=torch.tensor([0.5], dtype=torch.float32))
+    d1 = Data(x=torch.randn(1, 4), y=torch.tensor([1.5], dtype=torch.float32))
     return DataLoader([d0, d1], batch_size=2)
 
 
