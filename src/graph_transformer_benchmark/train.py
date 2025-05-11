@@ -3,6 +3,7 @@
 Training pipeline for GraphTransformer benchmarks with reproducible seeding
 and health-metrics logging.
 """
+import logging
 import random
 
 import mlflow
@@ -14,16 +15,21 @@ from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
 
-from graph_transformer_benchmark.data import build_dataloaders, enrich_batch
+from graph_transformer_benchmark.data import build_dataloaders
 from graph_transformer_benchmark.evaluate import evaluate
 from graph_transformer_benchmark.graph_models import build_model
 from graph_transformer_benchmark.utils import (
+    BatchEnrichedModel,
+    build_run_name,
     get_device,
     init_mlflow,
     log_config,
+    log_dataset_stats,
     log_health_metrics,
     set_seed,
 )
+
+logging.basicConfig(level=logging.INFO)
 
 _GLOBAL_SEED: int = 0
 
@@ -87,7 +93,6 @@ def train_one_epoch(
     loader: DataLoader,
     optimizer: torch.optim.Optimizer,
     device: torch.device,
-    cfg: DictConfig,
     epoch: int,
 ) -> float:
     """
@@ -98,7 +103,6 @@ def train_one_epoch(
         loader (DataLoader): Training data loader.
         optimizer (Optimizer): Optimizer instance.
         device (torch.device): Compute device.
-        cfg (DictConfig): Data configuration.
         epoch (int): Current epoch number.
 
     Returns:
@@ -108,8 +112,6 @@ def train_one_epoch(
     total_loss = 0.0
     for batch in tqdm(loader, desc=f"Train Epoch {epoch}", leave=False):
         batch = batch.to(device)
-        model_cfg = cfg.get("model", {})
-        batch = enrich_batch(batch, model_cfg)
         optimizer.zero_grad()
         outputs = model(batch)
         loss = F.cross_entropy(outputs, batch.y)
@@ -131,9 +133,10 @@ def run_training(cfg: DictConfig) -> None:
     _GLOBAL_SEED = cfg.training.seed
 
     init_mlflow(cfg)
-    run_name = cfg.training.mlflow.run_name
-    description = cfg.training.mlflow.description
-
+    run_name = cfg.model.training.mlflow.run_name or build_run_name(cfg)
+    description = cfg.model.training.mlflow.description
+    train_accuracy = []
+    val_accuracy = []
     with mlflow.start_run(run_name=run_name, nested=True):
         if description:
             mlflow.set_tag("mlflow.note.content", description)
@@ -142,31 +145,46 @@ def run_training(cfg: DictConfig) -> None:
         train_loader, val_loader, test_loader = build_dataloaders(
             cfg, generator=generator, worker_init_fn=worker_init_fn
         )
+        log_dataset_stats(train_loader, "train", log_to_mlflow=True)
+        log_dataset_stats(val_loader, "val",   log_to_mlflow=True)
+        log_dataset_stats(test_loader, "test", log_to_mlflow=True)
 
         device = get_device(cfg.training.device)
         num_feat = _infer_num_node_features(train_loader)
         num_cls = _infer_num_classes(train_loader)
         model = build_model(cfg.model, num_feat, num_cls).to(device)
+        model = BatchEnrichedModel(model, cfg.model)
         optimizer = torch.optim.Adam(model.parameters(), lr=cfg.training.lr)
 
         for epoch in trange(
             1, cfg.training.epochs + 1, desc="Epochs", unit="epoch"
         ):
             loss = train_one_epoch(
-                model, train_loader, optimizer, device, cfg, epoch
+                model, train_loader, optimizer, device, epoch
             )
             mlflow.log_metric("train_loss", loss, step=epoch)
-
+            logging.info(f"Evaluating epoch {epoch}...")
+            train_acc = evaluate(
+                model, train_loader, device, cfg
+            )
+            mlflow.log_metric("train_acc", train_acc, step=epoch)
             val_acc = evaluate(
                 model, val_loader, device, cfg
             )
             mlflow.log_metric("val_acc", val_acc, step=epoch)
+            logging.info(
+                f"Epoch {epoch} - Train Acc: {train_acc:.4f}"
+                + f", Val Acc: {val_acc:.4f}")
 
             log_health_metrics(model, optimizer, epoch)
+            train_accuracy.append(train_acc)
+            val_accuracy.append(val_acc)
 
         test_acc = evaluate(
             model, test_loader, device, cfg
         )
+        mlflow.log_metric("avg_train_acc", np.mean(train_accuracy))
+        mlflow.log_metric("avg_val_acc", np.mean(val_accuracy))
         mlflow.log_metric("test_acc", test_acc)
 
         if cfg.training.mlflow.log_artifacts:

@@ -68,7 +68,7 @@ def test_worker_init_fn_reproducibility():
 
 
 def test_train_one_epoch_decreases_loss(
-    dummy_model, generic_loader, optimizer, device, cfg_data
+    dummy_model, generic_loader, optimizer, device
 ):
     # Compute loss before any training
     dummy_model.eval()
@@ -80,7 +80,7 @@ def test_train_one_epoch_decreases_loss(
 
     # Perform one epoch of training
     avg_loss = train_one_epoch(
-        dummy_model, generic_loader, optimizer, device, cfg_data, epoch=1
+        dummy_model, generic_loader, optimizer, device, epoch=1
     )
 
     # Loss after training should be <= initial loss
