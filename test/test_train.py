@@ -31,6 +31,13 @@ def make_cfg(tmp_path, epochs: int = 3, log_artifacts: bool = False):
         "model": {
             "type": "GCN",
             "hidden_dim": 4,
+            "training": {
+                "mlflow": {
+                    "run_name": None,
+                    "description": None,
+                    "log_artifacts": log_artifacts,
+                }
+            },
         },
         "training": {
             "seed": 0,
@@ -38,10 +45,10 @@ def make_cfg(tmp_path, epochs: int = 3, log_artifacts: bool = False):
             "epochs": epochs,
             "lr": 0.01,
             "mlflow": {
-                "run_name": None,
-                "description": None,
-                "log_artifacts": log_artifacts,
-            },
+                    "run_name": None,
+                    "description": None,
+                    "log_artifacts": log_artifacts,
+                }
         },
     })
 
