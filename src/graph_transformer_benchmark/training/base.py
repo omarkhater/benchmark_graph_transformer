@@ -82,6 +82,10 @@ class BaseTrainer(ABC):
         patience: int = 5,
         curriculum_keys: Optional[List[str]] = None,
     ):
+        self._validate_inputs(
+            model, train_loader, val_loader, optimizer, device,
+            scheduler, num_epochs, val_frequency, patience
+        )
         self.model = model.to(device)
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -89,22 +93,19 @@ class BaseTrainer(ABC):
         self.scheduler = scheduler
         self.device = device
         self.num_epochs = num_epochs
-        self.val_frequency = val_frequency
+        if not (val_frequency > num_epochs):
+            self.val_frequency = val_frequency
         self.patience = patience
         self.best_loss = float('inf')
         self.best_epoch = 0
         self.best_state = copy.deepcopy(self.model.state_dict())
-        self.train_losses: List[float] = []
-        self.val_losses: List[float] = []
+        self.train_losses = []
+        self.val_losses = []
         if curriculum_keys is not None:
             self.curriculum_keys = curriculum_keys
         else:
             self.curriculum_keys = []
-        self._val_raws: Dict[str, List[float]] = {}
-        self._validate_inputs(
-            model, train_loader, val_loader, optimizer, device,
-            scheduler, num_epochs, val_frequency, patience
-        )
+        self._val_raws = {}
 
     def _validate_inputs(
         self,
@@ -294,17 +295,15 @@ class BaseTrainer(ABC):
             num_bad: int
             ) -> Tuple[bool, int]:
         """
-        Checks if the early stopping criteria is met and updates the
-        best loss and model state.
+        Checks if early stopping criteria is met.
 
         Args:
-            epoch (int): The current epoch.
-            val_loss (float): The current validation loss.
-            num_bad (int): The current count of epochs without improvement.
+            epoch: Current epoch number
+            val_loss: Current validation loss
+            num_bad: Number of epochs without improvement
 
         Returns:
-            A tuple (stop, num_bad) where 'stop' is True if early stopping
-            should be triggered, and num_bad is the updated count.
+            Tuple of (should_stop, new_num_bad)
         """
         if val_loss < self.best_loss - 1e-4:
             self.best_loss = val_loss
@@ -313,12 +312,14 @@ class BaseTrainer(ABC):
             num_bad = 0
         else:
             num_bad += 1
-            if num_bad >= self.patience:
-                logging.info(
-                    f"Early stopping at epoch {epoch+1} after "
-                    f"{num_bad*self.val_frequency} epochs patience period."
-                )
-                return True, num_bad
+
+        # Only stop if we've exceeded patience
+        if num_bad > self.patience:
+            logging.info(
+                f"Early stopping at epoch {epoch+1} after "
+                f"{num_bad} epochs without improvement."
+            )
+            return True, num_bad
         return False, num_bad
 
     def validate(self, current_epoch: int) -> float:
@@ -377,6 +378,8 @@ class BaseTrainer(ABC):
         self.after_validation(current_epoch)
 
         self.model.train()
+        if len(self.val_loader) == 0:
+            return float("nan")
         return running_loss / len(self.val_loader)
 
     def after_validation(self, current_epoch: int):
