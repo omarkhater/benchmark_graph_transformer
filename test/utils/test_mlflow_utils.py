@@ -1,15 +1,11 @@
-# tests/test_utils.py
-
 import os
-import random
 from pathlib import Path
 
-import numpy as np
 import pytest
 import torch
 from omegaconf import OmegaConf
 
-import graph_transformer_benchmark.utils as utils
+import graph_transformer_benchmark.utils.mlflow_utils as utils
 
 
 @pytest.fixture(autouse=True)
@@ -45,23 +41,6 @@ def mlflow_env(monkeypatch):
     return calls
 
 
-def test_flatten_cfg_nested_and_scalars():
-    cfg = OmegaConf.create({
-        "section": {
-            "a": 1,
-            "b": {"x": 2, "y": 3},
-            "c": 4,
-        }
-    })
-    flat = utils._flatten_cfg(cfg.section, prefix="sec.")
-    assert flat == {
-        "sec.a": 1,
-        "sec.b.x": 2,
-        "sec.b.y": 3,
-        "sec.c": 4,
-    }
-
-
 def test_init_mlflow_sets_uri_and_experiment(mlflow_env):
     cfg = OmegaConf.create({
         "training": {
@@ -95,33 +74,6 @@ def test_log_config_writes_yaml_and_params(tmp_path, mlflow_env):
     assert (tmp_path / "config.yaml").exists()
     assert mlflow_env["artifacts"] == ["config.yaml"]
     os.chdir(cwd)
-
-
-def test_set_seed_reproducible_and_cudnn_flags(monkeypatch):
-    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
-    utils.set_seed(1234)
-    r1, n1 = random.random(), np.random.rand()
-    t1 = torch.randint(0, 10, (1,)).item()
-    utils.set_seed(1234)  # Reset
-    assert random.random() == pytest.approx(r1)
-    assert np.random.rand() == pytest.approx(n1)
-    assert torch.randint(0, 10, (1,)).item() == t1
-    assert torch.backends.cudnn.deterministic
-    assert not torch.backends.cudnn.benchmark
-
-
-@pytest.mark.parametrize(
-    "cuda_avail, expected",
-    [
-        (True,  torch.device("cuda")),
-        (False, torch.device("cpu")),
-    ],
-)
-def test_get_device_respects_preference(monkeypatch, cuda_avail, expected):
-    monkeypatch.setattr(torch.cuda, "is_available",
-                        lambda: cuda_avail)
-    device = utils.get_device("cuda")
-    assert device == expected
 
 
 def test_log_health_metrics_records_grad_and_weight_norms(monkeypatch):
