@@ -15,7 +15,6 @@ from torch_geometric.data import Batch, Data
 from torch_geometric.datasets import Planetoid, TUDataset
 from torch_geometric.loader import DataLoader
 
-import graph_transformer_benchmark.evaluate as eval_mod
 import graph_transformer_benchmark.train as train_mod
 
 
@@ -100,8 +99,8 @@ class DummyTrainLoader:
 @pytest.fixture(autouse=True)
 def patch_ogb_evaluators(monkeypatch: Any) -> Generator[None, None, None]:
     """Monkeypatch OGB Evaluators to use dummy implementations."""
-    monkeypatch.setattr(eval_mod, "GraphEvaluator", DummyGraphEvaluator)
-    monkeypatch.setattr(eval_mod, "NodeEvaluator", DummyNodeEvaluator)
+    # monkeypatch.setattr(eval_mod, "GraphEvaluator", DummyGraphEvaluator)
+    # monkeypatch.setattr(eval_mod, "NodeEvaluator", DummyNodeEvaluator)
     yield
 
 
@@ -162,6 +161,21 @@ def generic_loader() -> DataLoader:
         edge_index=torch.tensor([[0], [0]], dtype=torch.long),
     )
     return DataLoader([g0, g1], batch_size=2)
+
+
+@pytest.fixture
+def regression_loader() -> DataLoader:
+    """Provide DataLoader for regression task with float targets."""
+    # Create a small graph with float node labels
+    graph = Data(
+        x=torch.randn(4, 4),
+        y=torch.randn(4),  # float targets for regression
+        edge_index=torch.tensor(
+            [[0, 1, 2, 3], [1, 2, 3, 0]],
+            dtype=torch.long
+        )
+    )
+    return DataLoader([graph], batch_size=1)
 
 
 @pytest.fixture
@@ -277,7 +291,7 @@ def simple_batch(simple_graph: Data) -> Batch:
 
 @pytest.fixture
 def graph_batch(simple_graph: Data) -> Batch:
-    """Batch of two identical graphs, for whole‑graph models."""
+    """Batch of two identical graphs, for whole‐graph models."""
     return Batch.from_data_list([simple_graph, simple_graph])
 
 

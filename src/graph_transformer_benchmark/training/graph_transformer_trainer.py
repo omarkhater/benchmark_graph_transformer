@@ -10,7 +10,7 @@ import torch.nn as nn
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 
-from graph_transformer_benchmark.evaluate import evaluate
+from graph_transformer_benchmark.evaluation import evaluate
 from graph_transformer_benchmark.training.base import BaseTrainer
 from graph_transformer_benchmark.utils import infer_task_and_loss
 
