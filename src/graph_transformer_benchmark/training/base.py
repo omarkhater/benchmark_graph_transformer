@@ -9,6 +9,8 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
+from graph_transformer_benchmark.utils import log_health_metrics
+
 from .tqdm_configuration import TqdmManager
 
 
@@ -264,6 +266,7 @@ class BaseTrainer(ABC):
                 else:
                     # Enable access all validation metrics by best epoch index
                     self.all_val_metrics.append([])
+                log_health_metrics(self.model, self.optimizer, epoch)
                 epoch_bar.update(1)
 
             epoch_bar.close()
