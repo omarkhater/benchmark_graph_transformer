@@ -86,6 +86,7 @@ class BaseTrainer(ABC):
             model, train_loader, val_loader, optimizer, device,
             scheduler, num_epochs, val_frequency, patience
         )
+
         self.model = model.to(device)
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -330,7 +331,17 @@ class BaseTrainer(ABC):
 
         Args:
             current_epoch (int): The current epoch number.
+
+        Returns:
+            float: Average validation loss or NaN if validation set is empty
         """
+        if len(self.val_loader) == 0:
+            self._avg_val_raws = {
+                key: float("nan") for key in self.curriculum_keys
+            }
+            self.after_validation(current_epoch)
+            return float("nan")
+
         self.model.eval()
         running_loss = 0.0
         self._val_raws = {k: [] for k in self.curriculum_keys}
@@ -378,8 +389,6 @@ class BaseTrainer(ABC):
         self.after_validation(current_epoch)
 
         self.model.train()
-        if len(self.val_loader) == 0:
-            return float("nan")
         return running_loss / len(self.val_loader)
 
     def after_validation(self, current_epoch: int):

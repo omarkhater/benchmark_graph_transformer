@@ -317,7 +317,7 @@ def test_early_stopping(simple_trainer: SimpleTrainer) -> None:
     assert not stop
     assert num_bad == 1
 
-    # Test just at patience limit
+    # Test worsening case at patience limit
     stop, num_bad = simple_trainer._check_early_stopping(3, 1.0, 1)
     assert not stop
     assert num_bad == 2
@@ -331,6 +331,10 @@ def test_early_stopping(simple_trainer: SimpleTrainer) -> None:
     stop, num_bad = simple_trainer._check_early_stopping(5, 0.3, 3)
     assert not stop
     assert num_bad == 0
+
+    # Test improvement keeps best values
+    assert simple_trainer.best_loss == 0.3
+    assert simple_trainer.best_epoch == 5
 
 
 def test_ensure_on_device(simple_trainer: SimpleTrainer) -> None:
