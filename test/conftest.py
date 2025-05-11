@@ -243,17 +243,6 @@ def patch_training_dependencies(
     monkeypatch.setattr(train_mod, "get_device", lambda dev: device)
     monkeypatch.setattr(train_mod, "init_mlflow", lambda cfg: None)
     monkeypatch.setattr(train_mod, "log_config", lambda cfg: None)
-    monkeypatch.setattr(
-        train_mod,
-        "log_health_metrics",
-        lambda m, o, e: None
-    )
-    monkeypatch.setattr(
-        train_mod,
-        "evaluate",
-        lambda model, loader, dev, cfg: 0.42
-    )
-
     monkeypatch.setattr(mlflow, "start_run", lambda **kw: DummyRun())
     metrics = []
     artifacts = []

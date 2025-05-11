@@ -45,7 +45,7 @@ def _evaluate_graph_level(
     y_pred = np.concatenate(all_pred, axis=0)
     result: Dict[str, float] = evaluator.eval(
         {"y_true": y_true, "y_pred": y_pred})
-    return result["rocauc"]
+    return result["rocauc"], "rocauc"
 
 
 def _evaluate_node_level(
@@ -85,7 +85,7 @@ def _evaluate_node_level(
     y_pred = np.concatenate(all_pred, axis=0)
     result: Dict[str, float] = evaluator.eval(
         {"y_true": y_true, "y_pred": y_pred})
-    return result["acc"]
+    return result["acc"], "accuracy"
 
 
 def _evaluate_generic(
@@ -114,7 +114,7 @@ def _evaluate_generic(
             labels = batch.y.view(-1)
             correct += int((preds == labels).sum().item())
             total += labels.size(0)
-    return correct / total if total > 0 else 0.0
+    return correct / total if total > 0 else 0.0, "accuracy"
 
 
 def evaluate(
