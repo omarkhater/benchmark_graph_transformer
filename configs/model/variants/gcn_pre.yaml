@@ -1,0 +1,15 @@
+defaults:
+  - transformer
+
+task: graph
+type: GraphTransformer
+
+gnn_conv_type: gcn
+gnn_position: pre
+
+training:
+  mlflow:
+    run_name: GraphTransformer-GCN-Pre
+    description: |
+      GraphTransformer with GNN convolution type as GCN.
+      The position of GNN is set to pre. No Bias or positional encoding is used.

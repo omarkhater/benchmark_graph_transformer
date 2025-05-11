@@ -4,3 +4,9 @@ defaults:
 
 task: graph
 type: GraphTransformer
+
+training:
+  mlflow:
+    run_name: GraphTransformer-Basic
+    description: |
+      GraphTransformer with basic settings.
