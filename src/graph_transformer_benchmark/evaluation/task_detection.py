@@ -62,3 +62,34 @@ def _is_graph_level_task(batch: Union[Data, Batch]) -> bool:
     num_graphs = int(batch.batch.max()) + 1
     # True if number of targets matches number of graphs
     return batch.y.size(0) == num_graphs
+
+
+def is_multiclass_task(batch: Union[Data, Batch]) -> bool:
+    """Determine if task is multiclass classification.
+
+    Detection is based on:
+    - Target tensor shape and dtype (categorical)
+    - Number of unique classes > 2
+    - Not regression (float dtype)
+
+    Parameters
+    ----------
+    batch : Union[Data, Batch]
+        PyTorch Geometric data batch to inspect
+
+    Returns
+    -------
+    bool
+        True if task is multiclass classification,
+        False for binary or regression tasks
+    """
+    # Skip if regression
+    if batch.y.dtype in (torch.float32, torch.float64):
+        return False
+
+    # Check shape and unique classes
+    if batch.y.ndim > 1 and batch.y.shape[1] > 2:
+        return True  # Multi-class logits
+
+    unique_classes = torch.unique(batch.y)
+    return len(unique_classes) > 2

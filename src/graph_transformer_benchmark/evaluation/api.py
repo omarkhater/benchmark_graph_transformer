@@ -7,12 +7,12 @@ from torch_geometric.loader import DataLoader
 
 from .metrics import (
     collect_predictions,
-    compute_classification_metrics,
+    compute_generic_classification,
     compute_graph_metrics,
     compute_node_metrics,
     compute_regression_metrics,
 )
-from .task_detection import detect_task_type
+from .task_detection import detect_task_type, is_multiclass_task
 from .types import TaskType
 
 
@@ -40,4 +40,6 @@ def evaluate(
         if task == TaskType.NODE_CLASSIFICATION:
             return compute_node_metrics(model, loader, device, dataset_name)
 
-    return compute_classification_metrics(y_true, y_pred)
+    if task == TaskType.GRAPH_CLASSIFICATION:
+        is_multiclass = is_multiclass_task(loader)
+        return compute_generic_classification(y_true, y_pred, is_multiclass)

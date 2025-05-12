@@ -35,6 +35,14 @@ class GraphTransformerTrainer(BaseTrainer):
         "precision",
         "recall",
         "r2",
+        "macro_recall",
+        "macro_precision",
+        "macro_f1",
+        "micro_recall",
+        "micro_precision",
+        "micro_f1",
+        "weighted_f1",
+        "balanced_accuracy",
         }
     lower_is_better = {"loss", "mse", "rmse", "mae"}
 
