@@ -1,6 +1,7 @@
 import pytest
 import torch
 import torch.nn as nn
+from omegaconf import OmegaConf
 
 from graph_transformer_benchmark.evaluation import evaluate
 
@@ -87,3 +88,62 @@ def test_predictions_match_targets(node_loader, device, cfg_generic):
     batch = next(iter(node_loader))
     assert model(batch).shape[-1] == 2
     assert isinstance(metrics["accuracy"], float)
+
+
+def test_evaluate_ogb_graph_classification(
+    graph_loader, device, monkeypatch
+):
+    """Test OGB graph classification metrics computation."""
+    cfg = OmegaConf.create({"data": {"dataset": "ogbg-molhiv"}})
+    model = DummyModel(pred_dim=1)
+
+    # Mock the task detection to return GRAPH_CLASSIFICATION
+    def mock_detect_task(loader):
+        from graph_transformer_benchmark.evaluation.types import TaskType
+        return TaskType.GRAPH_CLASSIFICATION
+
+    monkeypatch.setattr(
+        "graph_transformer_benchmark.evaluation.api.detect_task_type",
+        mock_detect_task
+    )
+
+    def mock_compute_graph_metrics(*args, **kwargs):
+        return {
+            "accuracy": 0.75,
+            "rocauc": 0.85,
+            "macro_f1": 0.80
+        }
+
+    monkeypatch.setattr(
+        "graph_transformer_benchmark.evaluation.api.compute_graph_metrics",
+        mock_compute_graph_metrics
+    )
+
+    metrics = evaluate(model, graph_loader, device, cfg)
+    assert "accuracy" in metrics
+    assert "rocauc" in metrics
+    assert "macro_f1" in metrics
+    assert metrics["rocauc"] == 0.85
+
+
+def test_evaluate_ogb_node_classification(
+    node_loader, device, monkeypatch
+):
+    """Test OGB node classification metrics computation."""
+    cfg = OmegaConf.create({"data": {"dataset": "ogbn-arxiv"}})
+    model = DummyModel(pred_dim=3)  # 3 classes
+
+    def mock_compute_node_metrics(*args, **kwargs):
+        return {
+            "accuracy": 0.90,
+            "macro_f1": 0.85
+        }
+
+    monkeypatch.setattr(
+        "graph_transformer_benchmark.evaluation.api.compute_node_metrics",
+        mock_compute_node_metrics
+    )
+
+    metrics = evaluate(model, node_loader, device, cfg)
+    assert metrics["accuracy"] == 0.90
+    assert metrics["macro_f1"] == 0.85
