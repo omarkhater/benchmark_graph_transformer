@@ -8,6 +8,8 @@ from torch import nn
 from graph_transformer_benchmark.evaluation.metrics import (
     collect_predictions,
     compute_classification_metrics,
+    compute_graph_metrics,
+    compute_node_metrics,
     compute_regression_metrics,
 )
 
@@ -66,3 +68,73 @@ def test_multiclass_predictions(node_loader, device):
 
     assert y_pred.ndim == 2  # (num_nodes, num_classes)
     assert y_true.ndim == 1  # (num_nodes,)
+
+
+def test_compute_node_metrics_generic(node_loader, device):
+    """Test node metrics for non-OGB dataset."""
+    model = IdentityModel()
+    metrics = compute_node_metrics(
+        model, node_loader, device, dataset_name="cora"
+    )
+    assert "accuracy" in metrics
+    assert "macro_f1" in metrics
+
+
+@pytest.mark.parametrize("eval_response", [
+    {"rocauc": 0.85, "acc": 0.75, "macro_f1": 0.80},  # all metrics
+    {"rocauc": 0.85},  # minimum required metrics
+])
+def test_compute_graph_metrics(
+    graph_loader, device, monkeypatch, eval_response
+):
+    """Test graph metrics computation with different evaluator responses."""
+    class MockGraphEvaluator:
+
+        def __init__(self, name):
+            self.name = name
+
+        def eval(self, inputs):
+            return eval_response
+
+    monkeypatch.setattr(
+        "graph_transformer_benchmark.evaluation.metrics.GraphEvaluator",
+        MockGraphEvaluator
+    )
+
+    model = IdentityModel()
+    metrics = compute_graph_metrics(
+        model, graph_loader, device, dataset_name="ogbg-molhiv"
+    )
+
+    assert metrics["rocauc"] == eval_response["rocauc"]
+    assert metrics["accuracy"] == eval_response.get("acc", 0.0)
+    assert metrics["macro_f1"] == eval_response.get("macro_f1", 0.0)
+
+
+@pytest.mark.parametrize("eval_response", [
+    {"acc": 0.90, "macro_f1": 0.85},  # all metrics
+    {"acc": 0.90},  # only accuracy
+])
+def test_compute_node_metrics_ogb(
+    node_loader, device, monkeypatch, eval_response
+):
+    """Test node metrics computation for OGB datasets."""
+    class MockNodeEvaluator:
+        def __init__(self, name):
+            self.name = name
+
+        def eval(self, inputs):
+            return eval_response
+
+    monkeypatch.setattr(
+        "graph_transformer_benchmark.evaluation.metrics.NodeEvaluator",
+        MockNodeEvaluator
+    )
+
+    model = IdentityModel()
+    metrics = compute_node_metrics(
+        model, node_loader, device, dataset_name="ogbn-arxiv"
+    )
+
+    assert metrics["accuracy"] == eval_response["acc"]
+    assert metrics["macro_f1"] == eval_response.get("macro_f1", 0.0)
