@@ -15,55 +15,7 @@ from torch import nn
 from torch_geometric.loader import DataLoader
 
 from .classification_metrics import compute_generic_classification
-
-
-def collect_predictions(
-    model: nn.Module,
-    loader: DataLoader,
-    device: torch.device
-) -> tuple[np.ndarray, np.ndarray]:
-    """Collect model predictions and ground truth labels.
-
-    Parameters
-    ----------
-    model : nn.Module
-        Model to evaluate
-    loader : DataLoader
-        DataLoader containing validation/test data
-    device : torch.device
-        Device to run inference on
-
-    Returns
-    -------
-    tuple[np.ndarray, np.ndarray]
-        True labels and model predictions
-    """
-    all_true, all_pred = [], []
-    model.eval()
-
-    with torch.no_grad():
-        for batch in loader:
-            batch = batch.to(device)
-            logits = model(batch)
-
-            # Handle shape normalization
-            if logits.ndim > 2:
-                logits = logits.reshape(-1, logits.size(-1))
-            elif logits.ndim == 2 and batch.y.ndim == 1:
-                logits = logits.reshape(-1)
-
-            labels = batch.y.reshape(-1) if batch.y.ndim > 1 else batch.y
-
-            all_true.append(labels.cpu().numpy())
-            all_pred.append(logits.cpu().numpy())
-
-    y_true = np.concatenate(all_true)
-    y_pred = np.concatenate(all_pred)
-
-    if y_pred.ndim == 2 and y_pred.shape[1] == 1:
-        y_pred = y_pred.reshape(-1)
-
-    return y_true, y_pred
+from .predictors import collect_predictions
 
 
 def compute_classification_metrics(

@@ -97,4 +97,4 @@ def run_training(cfg: DictConfig) -> float:
         )
 
         _, metrics = trainer.train()
-        return float(metrics["best_loss"])
+        return float(metrics.get("best_loss", float("nan")))

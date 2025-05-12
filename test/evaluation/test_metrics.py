@@ -34,16 +34,6 @@ def random_regression():
     return y_true, y_pred
 
 
-def test_collect_predictions(node_loader, device):
-    """Should collect and reshape predictions correctly."""
-    model = IdentityModel()
-    y_true, y_pred = collect_predictions(model, node_loader, device)
-
-    assert isinstance(y_true, np.ndarray)
-    assert isinstance(y_pred, np.ndarray)
-    assert y_true.shape == y_pred.shape
-
-
 def test_classification_metrics_perfect(perfect_predictions):
     """Should compute perfect scores for identical predictions."""
     y_true, y_pred = perfect_predictions

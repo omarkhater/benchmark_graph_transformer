@@ -40,11 +40,10 @@ def collect_batch_prediction(
     batch = batch.to(device)
     logits = model(batch)
 
-    # Reshape predictions and labels to 1D/2D as needed
     if logits.ndim > 2:
         logits = logits.reshape(-1, logits.size(-1))
     elif logits.ndim == 2 and batch.y.ndim == 1:
-        logits = logits.reshape(-1)
+        logits = logits.squeeze(1)
 
     labels = batch.y.reshape(-1) if batch.y.ndim > 1 else batch.y
     return BatchPrediction(labels=labels, logits=logits)

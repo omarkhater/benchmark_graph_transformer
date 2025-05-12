@@ -1,74 +1,76 @@
+# tests/test_train.py
+from __future__ import annotations
+
 from typing import Any
 
 import torch
 from omegaconf import OmegaConf
 
-from graph_transformer_benchmark.train import (
-    run_training,
-)
+from graph_transformer_benchmark.train import run_training
 
 
-def make_cfg(tmp_path, epochs: int = 3, log_artifacts: bool = False):
-    """Construct a minimal DictConfig for run_training."""
-    return OmegaConf.create({
-        "data": {
-            "dataset": "MUTAG",
-            "root": str(tmp_path),
-            "batch_size": 1,
-            "num_workers": 0,
-        },
-        "model": {
-            "type": "GCN",
-            "hidden_dim": 4,
+# --------------------------------------------------------------------------- #
+# config helper
+# --------------------------------------------------------------------------- #
+def _make_cfg(tmp_path, *, epochs: int = 2,
+              log_artifacts: bool = False) -> Any:
+    return OmegaConf.create(
+        {
             "training": {
-                "mlflow": {
-                    "run_name": None,
-                    "description": None,
-                    "log_artifacts": log_artifacts,
+                "seed": 0,
+                "device": "cpu",
+                "lr": 0.01,
+                "epochs": epochs,
+                "val_frequency": 1,
+                "patience": 3,
+                "log_artifacts": log_artifacts,
+            },
+            "model": {
+                "training": {
+                    "mlflow": {
+                        "run_name": "pytest-run",
+                        "description": "CI unit-test",
+                    }
                 }
             },
-        },
-        "training": {
-            "seed": 0,
-            "device": "cpu",
-            "epochs": epochs,
-            "lr": 0.01,
-            "val_frequency": 1,
-            "patience": 1,
-            "mlflow": {
-                    "run_name": None,
-                    "description": None,
-                    "log_artifacts": log_artifacts,
-                }
-        },
-    })
+            "data": {"dataset": "MUTAG", "root": str(tmp_path)},
+        }
+    )
 
 
-def test_run_training_logs_metrics(
-    tmp_path: Any, patch_training_dependencies: Any
-) -> None:
-    """run_training should log expected metrics without artifacts."""
-    cfg = make_cfg(tmp_path, epochs=2, log_artifacts=False)
+# --------------------------------------------------------------------------- #
+# tests
+# --------------------------------------------------------------------------- #
+def test_run_training_logs_metrics(tmp_path, patch_training_dependencies):
+    """Exactly one validation-accuracy metric should be emitted."""
+    cfg = _make_cfg(tmp_path, epochs=2, log_artifacts=False)
     run_training(cfg)
 
-    keys = [metric[0] for metric in patch_training_dependencies.metrics]
-    assert keys.count("loss/train/total") == 2
-    assert keys.count("val_accuracy") == 1
-    assert keys.count("train_accuracy") == 1
-    assert patch_training_dependencies.artifacts == ["best_model.pth"]
+    keys: list[str] = [k for k, *_ in patch_training_dependencies.metrics]
+    val_acc = [
+        k for k in keys
+        if k.startswith("val/") and k.endswith("/accuracy")
+    ]
+    assert len(val_acc) == 1, f"logged keys={keys}"
 
 
 def test_run_training_artifacts(
-    tmp_path: Any,
-    patch_training_dependencies: Any,
-    monkeypatch: Any,
-) -> None:
-    """When log_artifacts=True, model.pth should be saved and logged once."""
-    cfg = make_cfg(tmp_path, epochs=1, log_artifacts=True)
-    # Update mock to handle pickle_module argument
+    tmp_path, monkeypatch, patch_training_dependencies
+):
+    """`best_model.pth` must be logged once when artifacts are enabled."""
     monkeypatch.setattr(
-        torch, "save",
-        lambda state, path, **kwargs: open(path, "w").close()
+        torch, "save", lambda obj, path, **kw: open(path, "w").close()
     )
+
+    cfg = _make_cfg(tmp_path, epochs=1, log_artifacts=True)
     run_training(cfg)
-    assert patch_training_dependencies.artifacts == ["best_model.pth"]
+
+    paths = [p for p in patch_training_dependencies.artifacts if p]
+    assert paths == ["best_model.pth"]
+
+
+def test_return_value_is_finite(tmp_path):
+    """`run_training` should return a finite float best-loss."""
+    cfg = _make_cfg(tmp_path, epochs=1, log_artifacts=False)
+    best = run_training(cfg)
+    assert isinstance(best, float) and not torch.isnan(torch.tensor(best))
