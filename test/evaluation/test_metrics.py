@@ -7,7 +7,7 @@ from torch import nn
 
 from graph_transformer_benchmark.evaluation.metrics import (
     collect_predictions,
-    compute_classification_metrics,
+    compute_generic_classification,
     compute_graph_metrics,
     compute_node_metrics,
     compute_regression_metrics,
@@ -39,7 +39,7 @@ def random_regression():
 def test_classification_metrics_perfect(perfect_predictions):
     """Should compute perfect scores for identical predictions."""
     y_true, y_pred = perfect_predictions
-    metrics = compute_classification_metrics(y_true, y_pred)
+    metrics = compute_generic_classification(y_true, y_pred)
 
     assert metrics["accuracy"] == 1.0
     assert metrics["macro_f1"] == 1.0
@@ -81,7 +81,7 @@ def test_compute_node_metrics_generic(node_loader, device):
 
 
 @pytest.mark.parametrize("eval_response", [
-    {"rocauc": 0.85, "acc": 0.75, "macro_f1": 0.80},  # all metrics
+    {"rocauc": 0.85, "accuracy": 0.75, "macro_f1": 0.80},  # all metrics
     {"rocauc": 0.85},  # minimum required metrics
 ])
 def test_compute_graph_metrics(
@@ -97,7 +97,8 @@ def test_compute_graph_metrics(
             return eval_response
 
     monkeypatch.setattr(
-        "graph_transformer_benchmark.evaluation.metrics.GraphEvaluator",
+        "graph_transformer_benchmark.evaluation."
+        "classification_metrics.GraphEvaluator",
         MockGraphEvaluator
     )
 
@@ -107,13 +108,13 @@ def test_compute_graph_metrics(
     )
 
     assert metrics["rocauc"] == eval_response["rocauc"]
-    assert metrics["accuracy"] == eval_response.get("acc", 0.0)
+    assert metrics["accuracy"] == eval_response.get("accuracy", 0.0)
     assert metrics["macro_f1"] == eval_response.get("macro_f1", 0.0)
 
 
 @pytest.mark.parametrize("eval_response", [
-    {"acc": 0.90, "macro_f1": 0.85},  # all metrics
-    {"acc": 0.90},  # only accuracy
+    {"accuracy": 0.90, "macro_f1": 0.85},  # all metrics
+    {"accuracy": 0.90},  # only accuracy
 ])
 def test_compute_node_metrics_ogb(
     node_loader, device, monkeypatch, eval_response
@@ -127,7 +128,8 @@ def test_compute_node_metrics_ogb(
             return eval_response
 
     monkeypatch.setattr(
-        "graph_transformer_benchmark.evaluation.metrics.NodeEvaluator",
+        "graph_transformer_benchmark.evaluation."
+        "classification_metrics.NodeEvaluator",
         MockNodeEvaluator
     )
 
@@ -136,5 +138,5 @@ def test_compute_node_metrics_ogb(
         model, node_loader, device, dataset_name="ogbn-arxiv"
     )
 
-    assert metrics["accuracy"] == eval_response["acc"]
+    assert metrics["accuracy"] == eval_response["accuracy"]
     assert metrics["macro_f1"] == eval_response.get("macro_f1", 0.0)

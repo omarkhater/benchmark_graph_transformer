@@ -71,7 +71,7 @@ def test_evaluate_node_regression(regression_loader, device, cfg_generic):
 
 def test_unsupported_loader_type():
     """Should raise error for unsupported loader type."""
-    with pytest.raises(ValueError, match="Unsupported loader type"):
+    with pytest.raises(TypeError, match="Unsupported loader type"):
         evaluate(
             model=DummyModel(),
             loader=["not", "a", "dataloader"],
@@ -115,7 +115,7 @@ def test_evaluate_ogb_graph_classification(
         }
 
     monkeypatch.setattr(
-        "graph_transformer_benchmark.evaluation.api.compute_graph_metrics",
+        "ogb.graphproppred.Evaluator.eval",
         mock_compute_graph_metrics
     )
 
@@ -140,7 +140,7 @@ def test_evaluate_ogb_node_classification(
         }
 
     monkeypatch.setattr(
-        "graph_transformer_benchmark.evaluation.api.compute_node_metrics",
+        "ogb.nodeproppred.Evaluator.eval",
         mock_compute_node_metrics
     )
 

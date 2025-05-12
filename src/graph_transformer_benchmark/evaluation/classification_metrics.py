@@ -358,7 +358,7 @@ def compute_ogb_graph_metrics(
     """
     evaluator = GraphEvaluator(name=dataset_name)
     ogb_scores = evaluator.eval({"y_true": y_true, "y_pred": y_pred})
-
+    ogb_scores = _modify_ogb_metrics(ogb_scores)
     generic = compute_generic_classification(
         y_true, y_pred, is_multiclass=True
     )
@@ -406,8 +406,35 @@ def compute_ogb_node_metrics(
     evaluator = NodeEvaluator(name=dataset_name)
     preds = y_pred.argmax(axis=-1) if y_pred.ndim > 1 else y_pred
     ogb_scores = evaluator.eval({"y_true": y_true, "y_pred": preds})
-
+    ogb_scores = _modify_ogb_metrics(ogb_scores)
     generic = compute_generic_classification(
         y_true, y_pred, is_multiclass=True
     )
     return {**generic, **ogb_scores}
+
+
+def _modify_ogb_metrics(ogb_scores: MetricDict) -> MetricDict:
+    """Modify OGB metrics to match the expected output format.
+    Parameters
+    ----------
+    ogb_scores : MetricDict
+        Dictionary containing OGB metrics.
+    Returns
+    -------
+    MetricDict
+        Modified dictionary with renamed keys and default values.
+    Notes
+    -----
+    This function modifies the OGB metrics to match the expected output
+    format. It renames the keys to 'rocauc', 'macro_f1', and 'accuracy'.
+    It also sets default values for 'rocauc', 'macro_f1', and 'accuracy'
+    to 0.0 if they are not present in the input dictionary.
+    """
+    if "acc" in ogb_scores:
+        ogb_scores["accuracy"] = ogb_scores.pop("acc")
+
+    ogb_scores.setdefault("rocauc", 0.0)
+    ogb_scores.setdefault("macro_f1", 0.0)
+    ogb_scores.setdefault("accuracy", 0.0)
+
+    return ogb_scores
