@@ -11,13 +11,14 @@ from sklearn.metrics import f1_score
 def compute_generic_classification(
     y_true: np.ndarray,
     y_pred: np.ndarray,
-    is_multiclass: bool = True
+    is_multiclass: bool = True,
+    threshold: float = 0.5,
 ) -> Dict[str, float]:
     """Compute standard classification metrics."""
     if is_multiclass and y_pred.ndim > 1:
         preds = y_pred.argmax(axis=-1)
     else:
-        preds = (y_pred > 0).astype(int)
+        preds = (y_pred >= threshold).astype(int)
 
     return {
         "accuracy": float((preds == y_true).mean()),
