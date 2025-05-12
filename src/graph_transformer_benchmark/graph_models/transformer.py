@@ -75,9 +75,9 @@ def build_graph_transformer(
     if cfg.get("with_degree_enc", None):
         encoders.append(
             DegreeEncoder(cfg.max_degree, cfg.max_degree, cfg.hidden_dim))
-    if cfg.get("with_eigenc", None):
+    if cfg.get("with_eig_enc", None):
         encoders.append(EigEncoder(cfg.num_eigenc, cfg.hidden_dim))
-    if cfg.get("with_svdenc", None):
+    if cfg.get("with_svd_enc", None):
         encoders.append(SVDEncoder(cfg.num_svdenc, cfg.hidden_dim))
 
     gnn_block = None

@@ -1,0 +1,16 @@
+defaults:
+  - transformer
+
+task: graph
+type: GraphTransformer
+
+gnn_conv_type: gcn
+gnn_position: parallel
+
+training:
+  mlflow:
+    run_name: GraphTransformer-GCN-Parallel
+    description: |
+      GraphTransformer with GNN convolution type as GCN.
+      The position of GNN is set to parallel.
+      No Bias or positional encoding is used.

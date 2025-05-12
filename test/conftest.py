@@ -1,5 +1,8 @@
+import shutil
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Generator, List
+from unittest.mock import MagicMock
 
 import mlflow
 import pytest
@@ -9,9 +12,9 @@ from torch import Tensor
 from torch.nn import Module, Parameter
 from torch.optim import SGD
 from torch_geometric.data import Batch, Data
+from torch_geometric.datasets import Planetoid, TUDataset
 from torch_geometric.loader import DataLoader
 
-import graph_transformer_benchmark.evaluate as eval_mod
 import graph_transformer_benchmark.train as train_mod
 
 
@@ -96,8 +99,8 @@ class DummyTrainLoader:
 @pytest.fixture(autouse=True)
 def patch_ogb_evaluators(monkeypatch: Any) -> Generator[None, None, None]:
     """Monkeypatch OGB Evaluators to use dummy implementations."""
-    monkeypatch.setattr(eval_mod, "GraphEvaluator", DummyGraphEvaluator)
-    monkeypatch.setattr(eval_mod, "NodeEvaluator", DummyNodeEvaluator)
+    # monkeypatch.setattr(eval_mod, "GraphEvaluator", DummyGraphEvaluator)
+    # monkeypatch.setattr(eval_mod, "NodeEvaluator", DummyNodeEvaluator)
     yield
 
 
@@ -118,9 +121,9 @@ def ensure_model_has_parameter(dummy_model: DummyModel) -> None:
 
 @pytest.fixture
 def graph_loader() -> DataLoader:
-    """Provide a DataLoader for two graph‐level samples with labels [0],[1]."""
-    d0 = Data(x=torch.randn(1, 4), y=torch.tensor([[0]]))
-    d1 = Data(x=torch.randn(1, 4), y=torch.tensor([[1]]))
+    """Provide a DataLoader for two graph‐level samples with float targets."""
+    d0 = Data(x=torch.randn(1, 4), y=torch.tensor([0.5], dtype=torch.float32))
+    d1 = Data(x=torch.randn(1, 4), y=torch.tensor([1.5], dtype=torch.float32))
     return DataLoader([d0, d1], batch_size=2)
 
 
@@ -158,6 +161,21 @@ def generic_loader() -> DataLoader:
         edge_index=torch.tensor([[0], [0]], dtype=torch.long),
     )
     return DataLoader([g0, g1], batch_size=2)
+
+
+@pytest.fixture
+def regression_loader() -> DataLoader:
+    """Provide DataLoader for regression task with float targets."""
+    # Create a small graph with float node labels
+    graph = Data(
+        x=torch.randn(4, 4),
+        y=torch.randn(4),  # float targets for regression
+        edge_index=torch.tensor(
+            [[0, 1, 2, 3], [1, 2, 3, 0]],
+            dtype=torch.long
+        )
+    )
+    return DataLoader([graph], batch_size=1)
 
 
 @pytest.fixture
@@ -225,11 +243,11 @@ def patch_training_dependencies(
         batch_size=generic_loader.batch_size
     )
 
-    # Monkeypatch build_dataloaders to return our dummy_loader twice
+    # Monkeypatch build_dataloaders to return our dummy_loader three times
     monkeypatch.setattr(
         train_mod,
         "build_dataloaders",
-        lambda cfg, **kw: (dummy_loader, dummy_loader),
+        lambda cfg, **kw: (dummy_loader, dummy_loader, dummy_loader)
     )
     monkeypatch.setattr(
         train_mod,
@@ -239,17 +257,6 @@ def patch_training_dependencies(
     monkeypatch.setattr(train_mod, "get_device", lambda dev: device)
     monkeypatch.setattr(train_mod, "init_mlflow", lambda cfg: None)
     monkeypatch.setattr(train_mod, "log_config", lambda cfg: None)
-    monkeypatch.setattr(
-        train_mod,
-        "log_health_metrics",
-        lambda m, o, e: None
-    )
-    monkeypatch.setattr(
-        train_mod,
-        "evaluate",
-        lambda model, loader, dev, cfg: 0.42
-    )
-
     monkeypatch.setattr(mlflow, "start_run", lambda **kw: DummyRun())
     metrics = []
     artifacts = []
@@ -284,7 +291,7 @@ def simple_batch(simple_graph: Data) -> Batch:
 
 @pytest.fixture
 def graph_batch(simple_graph: Data) -> Batch:
-    """Batch of two identical graphs, for whole‑graph models."""
+    """Batch of two identical graphs, for whole‐graph models."""
     return Batch.from_data_list([simple_graph, simple_graph])
 
 
@@ -315,3 +322,97 @@ def cfg_transformer() -> Any:
         "num_eigenc": 0,
         "num_svdenc": 0,
     })
+
+# Test Data
+
+
+@pytest.fixture(autouse=True)
+def cleanup_all(tmp_path: Path):
+    """
+    Remove any downloaded subfolders under tmp_path to keep filesystem clean.
+    """
+    yield
+    for sub in ("TUD", "Planetoid", "OGB"):
+        shutil.rmtree(tmp_path / sub, ignore_errors=True)
+
+
+@pytest.fixture(params=[
+    ("MUTAG", TUDataset, "TUD"),
+    ("proteins", TUDataset, "TUD"),
+    ("cora", Planetoid, "Planetoid"),
+    ("PubMed", Planetoid, "Planetoid"),
+])
+def dataset_info(request, tmp_path: Path):
+    """
+    Provides (name, expected_class, expected_subdir, tmp_path) tuples.
+    """
+    name, expected_cls, subdir = request.param
+    return name, expected_cls, subdir, tmp_path
+
+
+@pytest.fixture(params=[
+    ("MUTAG", TUDataset),
+    ("PubMed", Planetoid),
+])
+def generic_cfg_and_cls(request, tmp_path: Path):
+    """
+    Provides (cfg, expected_class) for generic dataset splits.
+    """
+    name, expected_cls = request.param
+    cfg = OmegaConf.create({
+        "data": {
+            "dataset": name,
+            "root": str(tmp_path),
+            "batch_size": 3,
+            "num_workers": 0,
+        }
+    })
+    return cfg, expected_cls
+
+
+@pytest.fixture
+def ogb_graph_dataset():
+    """
+    Fixtures a MagicMock OGB graph-level dataset with three sample graphs
+    and explicit train/valid/test splits.
+    """
+    mock_ds = MagicMock()
+    # three sample graphs
+    g1 = Data(x=torch.randn(2, 5), edge_index=torch.tensor([[0], [1]]))
+    g2 = Data(x=torch.randn(3, 5), edge_index=torch.tensor([[0, 1], [1, 2]]))
+    g3 = Data(x=torch.randn(4, 5), edge_index=torch.tensor([[0, 2], [2, 3]]))
+    graphs = [g1, g2, g3]
+    mock_ds.get_idx_split.return_value = {
+        "train": torch.tensor([0]),
+        "valid": torch.tensor([1]),
+        "test":  torch.tensor([2]),
+    }
+    mock_ds.__getitem__.side_effect = lambda idx: graphs[idx]
+    mock_ds.__len__.return_value = len(graphs)
+    return mock_ds, graphs
+
+
+@pytest.fixture
+def ogb_node_dataset():
+    """
+    Fixtures a MagicMock OGB node-level dataset (single graph)
+    with train/valid/test masks across nodes.
+    """
+    mock_ds = MagicMock()
+    num_nodes = 4
+    data = Data(
+        x=torch.randn(num_nodes, 8),
+        edge_index=torch.tensor([[0, 1, 2, 3], [1, 2, 3, 0]]),
+        y=torch.randint(0, 3, (num_nodes,)),
+    )
+    train_idx = torch.tensor([0, 2])
+    valid_idx = torch.tensor([1])
+    test_idx = torch.tensor([3])
+    mock_ds.get_idx_split.return_value = {
+        "train": train_idx,
+        "valid": valid_idx,
+        "test":  test_idx,
+    }
+    mock_ds.__getitem__.return_value = data
+    mock_ds.__len__.return_value = 1
+    return mock_ds, data, train_idx, valid_idx, test_idx

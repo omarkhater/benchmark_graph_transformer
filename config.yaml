@@ -1,13 +1,7 @@
 data:
-  dataset: CORA
+  dataset: MUTAG
   batch_size: 32
   num_workers: 4
-  with_degree_enc: false
-  with_eig_enc: false
-  with_svd_enc: false
-  with_spatial_bias: false
-  with_edge_bias: false
-  with_hop_bias: false
 model:
   type: GraphTransformer
   activation: gelu
@@ -20,29 +14,29 @@ model:
   seed: 42
   gnn_conv_type: null
   gnn_position: pre
-  max_degree: 32
-  num_eigenc: 8
-  num_svdenc: 8
-  num_spatial: 32
-  num_edges: 16
-  num_hops: 5
+  max_degree: 0
+  num_eigenc: 0
+  num_svdenc: 0
+  num_spatial: 0
+  num_edges: 0
+  num_hops: 0
   use_batch_norm: false
   use_residual: false
-  with_spatial_bias: false
-  with_edge_bias: false
-  with_hop_bias: false
-  with_degree_enc: false
-  with_eig_enc: false
-  with_svd_enc: false
-  task: node
+  task: graph
+  training:
+    mlflow:
+      run_name: GraphTransformer-Basic
+      description: GraphTransformer with basic settings.
 training:
   device: cpu
   lr: 0.001
-  epochs: 15
+  epochs: 3
   seed: 42
   n_trials: 10
+  val_frequency: 1
+  patience: 1
   mlflow:
-    experiment_name: CORA_Initial_Benchmark_fixed
+    experiment_name: test_improved_training-MUTAG
     tracking_uri: file:./mlruns
     log_artifacts: true
     run_name: ${model.type}

@@ -20,7 +20,7 @@ import torch
 from ogb.graphproppred import PygGraphPropPredDataset
 from ogb.nodeproppred import PygNodePropPredDataset
 from omegaconf import DictConfig
-from torch.utils.data import random_split
+from torch.utils.data import SubsetRandomSampler
 from torch_geometric.data import Batch, Dataset
 from torch_geometric.datasets import Planetoid, TUDataset
 from torch_geometric.loader import DataLoader
@@ -128,20 +128,6 @@ def _load_node_level(
     # same Data object, different boolean masks
     return loader, loader, loader
 
-
-def _load_planetoid(
-    dataset: Planetoid,
-    loader_kwargs: dict[str, Any],
-) -> DataLoaders:
-    """
-    Build (train, val, test) loaders for Planetoid node tasks.
-    """
-    data = dataset[0]
-    return (
-        DataLoader([data], shuffle=True,  **loader_kwargs),
-        DataLoader([data], shuffle=False, **loader_kwargs),
-        DataLoader([data], shuffle=False, **loader_kwargs),
-    )
 # --------------------------------------------------------------------------- #
 # Generic fallback
 # --------------------------------------------------------------------------- #
@@ -159,20 +145,30 @@ def _load_generic(
     n_test = int(total * test_ratio)
     n_train = total - n_val - n_test
     if min(n_train, n_val, n_test) < 1:
-        raise ValueError(
-            "Split ratios produce empty partition "
-            f"(train={n_train}, val={n_val}, test={n_test})."
+        return (
+            DataLoader(dataset, shuffle=True,  **loader_kwargs),
+            DataLoader(dataset, shuffle=False, **loader_kwargs),
+            DataLoader(dataset, shuffle=False, **loader_kwargs),
         )
 
     gen = loader_kwargs.get("generator", None)
-    train_ds, val_ds, test_ds = random_split(
-        dataset, [n_train, n_val, n_test], generator=gen
-    )
+    if gen is not None:
+        indices = torch.randperm(total, generator=gen).tolist()
+    else:
+        indices = torch.randperm(total).tolist()
+
+    train_indices = indices[:n_train]
+    val_indices = indices[n_train:n_train + n_val]
+    test_indices = indices[n_train + n_val:]
+
+    train_sampler = SubsetRandomSampler(train_indices)
+    val_sampler = SubsetRandomSampler(val_indices)
+    test_sampler = SubsetRandomSampler(test_indices)
 
     return (
-        DataLoader(train_ds, shuffle=True, **loader_kwargs),
-        DataLoader(val_ds, shuffle=False, **loader_kwargs),
-        DataLoader(test_ds, shuffle=False, **loader_kwargs),
+        DataLoader(dataset, sampler=train_sampler, **loader_kwargs),
+        DataLoader(dataset, sampler=val_sampler, **loader_kwargs),
+        DataLoader(dataset, sampler=test_sampler, **loader_kwargs),
     )
 
 # --------------------------------------------------------------------------- #
@@ -219,8 +215,6 @@ def build_dataloaders(
         return _load_graph_level(dataset, loader_kwargs)
     if key.startswith("ogbn-"):
         return _load_node_level(dataset, loader_kwargs)
-    if isinstance(dataset, Planetoid):
-        return _load_planetoid(dataset, loader_kwargs)
     return _load_generic(
         dataset,
         loader_kwargs,

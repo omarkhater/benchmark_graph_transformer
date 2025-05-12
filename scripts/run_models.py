@@ -71,7 +71,7 @@ def main():
             f"training.mlflow.experiment_name={args.exp_name}",
         ]
         print(">", " ".join(cmd))
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd)
         if result.returncode == 0:
             print(f"✔ Completed {model}\n")
         else:
