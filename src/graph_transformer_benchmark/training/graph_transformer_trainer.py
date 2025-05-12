@@ -130,11 +130,12 @@ class GraphTransformerTrainer(BaseTrainer):
 
         if self.save_dir:
             local_path = f"{self.save_dir}/model/best_model.pth"
+            self.save_pytorch_model(self.best_state, local_path)
         else:
             local_path = None
-        self.save_pytorch_model(self.best_state, local_path)
+
         if mlflow.active_run():
-            mlflow.log_artifact(local_path)
+            mlflow.log_artifact(local_path) if local_path else None
             mlflow.log_metric("best_val_loss", self.best_loss)
             mlflow.log_metric("best_val_epoch", self.best_epoch)
             mlflow.pytorch.log_model(self.model, "model")

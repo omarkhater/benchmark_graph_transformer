@@ -17,6 +17,7 @@ from graph_transformer_benchmark.training.graph_transformer_trainer import (
     GraphTransformerTrainer,
 )
 from graph_transformer_benchmark.utils import (
+    BatchEnrichedModel,
     build_run_name,
     configure_determinism,
     get_device,
@@ -80,7 +81,7 @@ def run_training(cfg: DictConfig) -> float:
         num_features = infer_num_node_features(train_loader)
         num_classes = infer_num_classes(train_loader)
         model = build_model(cfg.model, num_features, num_classes).to(device)
-
+        model = BatchEnrichedModel(model, cfg.model)
         optimizer = torch.optim.Adam(model.parameters(), lr=cfg.training.lr)
 
         trainer = GraphTransformerTrainer(
