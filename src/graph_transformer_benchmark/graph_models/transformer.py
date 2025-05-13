@@ -156,11 +156,7 @@ class NodeGraphTransformer(GraphTransformer):
         object.__setattr__(self, "ffn_hidden_dim", ffn_hidden)
         object.__setattr__(self, "attn_bias_providers", biases)
         object.__setattr__(self, "positional_encoders", pos_encs)
-        object.__setattr__(
-            self,
-            "node_lin",
-            nn.Linear(hidden_dim, num_node_classes)
-        )
+        self.node_lin = nn.Linear(hidden_dim, num_node_classes)
 
     def forward(self, data: Data) -> Tensor:
         """
