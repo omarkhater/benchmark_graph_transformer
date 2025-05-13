@@ -86,7 +86,7 @@ def main() -> None:
 
         print(">", " ".join(cmd))
         # capture both stdout and stderr for reporting
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd)
 
         if result.returncode == 0:
             print(f"✔ Completed {model}\n")
