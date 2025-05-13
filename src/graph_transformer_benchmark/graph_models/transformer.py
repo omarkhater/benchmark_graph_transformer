@@ -6,6 +6,7 @@ from typing import Callable, Optional, Sequence
 import torch.nn as nn
 from omegaconf import DictConfig
 from torch import Tensor
+from torch.nn import ModuleList
 from torch_geometric.contrib.nn.bias import (
     BaseBiasProvider,
     GraphAttnEdgeBias,
@@ -87,7 +88,7 @@ def build_graph_transformer(
         layer = conv_map[cfg.gnn_conv_type](cfg.hidden_dim, cfg.hidden_dim)
 
         def _hook(data: Data, x: Tensor) -> Tensor:
-            return layer(x, data.edge_index)
+            return layer.to(x.device)(x, data.edge_index)
 
         gnn_block = _hook
 
@@ -101,7 +102,7 @@ def build_graph_transformer(
         dropout=cfg.dropout,
         ffn_hidden_dim=cfg.get("ffn_hidden_dim", None),
         activation=cfg.get("activation", "gelu"),
-        attn_bias_providers=biases,
+        attn_bias_providers=ModuleList(biases),
         positional_encoders=encoders,
         gnn_block=gnn_block,
         gnn_position=cfg.get("gnn_position", "pre"),

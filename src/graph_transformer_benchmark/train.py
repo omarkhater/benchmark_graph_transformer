@@ -81,7 +81,7 @@ def run_training(cfg: DictConfig) -> float:
         num_features = infer_num_node_features(train_loader)
         num_classes = infer_num_classes(train_loader)
         model = build_model(cfg.model, num_features, num_classes).to(device)
-        model = BatchEnrichedModel(model, cfg.model)
+        model = BatchEnrichedModel(model, cfg.model, device).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=cfg.training.lr)
 
         trainer = GraphTransformerTrainer(

@@ -19,13 +19,17 @@ class BatchEnrichedModel(nn.Module):
     """Wraps a GraphTransformer so every batch is first enriched."""
     def __init__(self,
                  base_model: nn.Module,
-                 model_cfg: DictConfig) -> None:
+                 model_cfg: DictConfig,
+                 device: torch.device,
+                 ) -> None:
         super().__init__()
         self.base_model = base_model
         self.model_cfg = model_cfg
+        self.device = device
 
     def forward(self, batch: Data):
         batch = enrich_batch(batch, self.model_cfg)
+        batch = batch.to(self.device)
         return self.base_model(batch)
 
 

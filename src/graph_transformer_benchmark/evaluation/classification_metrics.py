@@ -21,6 +21,7 @@ see the metrics module.
 
 from __future__ import annotations
 
+import logging
 from typing import Dict, Iterable
 
 import numpy as np
@@ -39,11 +40,11 @@ from sklearn.metrics import (
 
 MetricDict = Dict[str, float]
 Array = np.ndarray
-
-
 # --------------------------------------------------------------------------- #
 # Small utility helpers
 # --------------------------------------------------------------------------- #
+
+
 def _safe_call(func, *args, **kwargs) -> float | None:
     """Execute *func* and swallow any exception, returning ``None`` instead.
 
@@ -71,6 +72,14 @@ def _safe_call(func, *args, **kwargs) -> float | None:
     try:
         return float(func(*args, **kwargs))  # type: ignore[arg-type]
     except Exception:  # pylint: disable=broad-except
+        logging.debug(
+            "Metric computation failed for %s with args %s and kwargs %s",
+            func.__name__,
+            args,
+            kwargs,
+        )
+        logging.exception("Exception occurred with traceback\n{exc_info=True}")
+
         return None
 
 

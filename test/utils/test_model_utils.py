@@ -16,7 +16,7 @@ def test_batch_enriched_model_forwards_correctly(
         cfg_transformer,
         simple_graph
         ):
-    model = BatchEnrichedModel(dummy_model, cfg_transformer)
+    model = BatchEnrichedModel(dummy_model, cfg_transformer, device="cpu")
     out = model(simple_graph)
     # DummyModel returns one-hot logits based on label value
     expected = torch.zeros((simple_graph.num_nodes, simple_graph.y.max() + 1))

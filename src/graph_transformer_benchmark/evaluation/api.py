@@ -99,7 +99,7 @@ def evaluate(
         return compute_regression_metrics(y_true, y_pred)
 
     # -------- Classification -------------------------------------------
-    is_multiclass = is_multiclass_task(next(iter(loader)))
+    is_multiclass = is_multiclass_task(loader)
 
     # --- OGB datasets ---------------------------------------------------
     if dataset_name.startswith(("ogbg", "ogbn")):

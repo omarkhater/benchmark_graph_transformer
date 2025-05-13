@@ -64,32 +64,50 @@ def _is_graph_level_task(batch: Union[Data, Batch]) -> bool:
     return batch.y.size(0) == num_graphs
 
 
-def is_multiclass_task(batch: Union[Data, Batch]) -> bool:
-    """Determine if task is multiclass classification.
+def is_multiclass_task(loader: DataLoader) -> bool:
+    """Determine whether a DataLoader’s task is multiclass classification.
 
-    Detection is based on:
-    - Target tensor shape and dtype (categorical)
-    - Number of unique classes > 2
-    - Not regression (float dtype)
+    Returns False immediately for regression (float targets),
+    otherwise returns True if there are more than two classes.
+
+    Strategy:
+    1. Peek at the first example’s `y.dtype` to detect regression (float).
+    2. If `dataset.num_classes` exists, use it.
+    3. Otherwise scan all integer labels to count unique values.
 
     Parameters
     ----------
-    batch : Union[Data, Batch]
-        PyTorch Geometric data batch to inspect
+    loader : DataLoader
+        A PyG DataLoader wrapping a dataset.
 
     Returns
     -------
     bool
-        True if task is multiclass classification,
-        False for binary or regression tasks
+        True if this is multiclass classification (>2 classes), else False.
     """
-    # Skip if regression
-    if batch.y.dtype in (torch.float32, torch.float64):
+    dataset = loader.dataset
+
+    # 1) Regression check: float targets → not multiclass classification
+    first = dataset[0]
+    y0 = first.y
+    # If y0 is a tensor of shape (N, C), squeeze to 1D
+    if y0.ndim > 1 and y0.shape[1] == 1:
+        y0 = y0.squeeze(1)
+    if y0.dtype in (torch.float32, torch.float64):
         return False
 
-    # Check shape and unique classes
-    if batch.y.ndim > 1 and batch.y.shape[1] > 2:
-        return True  # Multi-class logits
+    # 2) Use dataset metadata if present
+    num_classes = getattr(dataset, "num_classes", None)
+    if num_classes is not None:
+        return num_classes > 2
 
-    unique_classes = torch.unique(batch.y)
-    return len(unique_classes) > 2
+    # 3) Fallback: scan entire dataset to count unique integer labels
+    all_labels = []
+    for data in dataset:
+        y = data.y
+        if y.ndim > 1 and y.shape[1] == 1:
+            y = y.squeeze(1)
+        all_labels.append(y.view(-1))
+    all_labels = torch.cat(all_labels)
+    unique_count = int(torch.unique(all_labels).numel())
+    return unique_count > 2
