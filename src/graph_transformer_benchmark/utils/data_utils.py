@@ -19,7 +19,7 @@ def log_dataset_stats(
     loader: DataLoader,
     split_name: str = "train",
     *,
-    log_to_mlflow: bool = False,
+    log_to_mlflow: bool = True,
 ) -> None:
     """Log basic structural statistics of a graph DataLoader.
 
@@ -83,7 +83,7 @@ def log_dataset_stats(
     logging.info(msg)
 
     if log_to_mlflow:  # ── optional experiment tracking ────────────────────
-        prefix = f"{split_name}_"
+        prefix = f"data/{split_name}/"
         mlflow.log_params(
             {
                 f"{prefix}num_graphs": num_graphs,
