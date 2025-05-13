@@ -284,6 +284,8 @@ class BaseTrainer(ABC):
             return self.model, metrics
         except Exception as e:
             logging.error(f"An error occurred during training: {e}")
+            mlflow.log_param("error", str(e))
+            mlflow.log_param("traceback", traceback.format_exc())
             traceback.print_exc()
             return None, {}
         finally:
