@@ -4,3 +4,9 @@ defaults:
 
 type: GCN
 task: graph
+
+training:
+  mlflow:
+    run_name: GCN-Basic
+    description: |
+      Graph Convolutional Network (GCN) with basic settings.

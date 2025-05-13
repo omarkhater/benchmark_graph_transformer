@@ -81,6 +81,7 @@ def mock_graph_evaluator():
 
 def test_ogb_graph_metrics(mock_graph_evaluator):
     """Test OGB graph classification metrics."""
+    # Test single-column binary predictions
     y_true = np.array([[0], [1]])
     y_pred = np.array([[0.1], [0.9]])
     metrics = compute_ogb_graph_metrics(
@@ -90,6 +91,17 @@ def test_ogb_graph_metrics(mock_graph_evaluator):
     assert metrics["accuracy"] == 0.75
     assert metrics["macro_f1"] == 0.80
     mock_graph_evaluator.eval.assert_called_once()
+
+    # Reset mock and test two-column binary predictions
+    mock_graph_evaluator.reset_mock()
+    y_true = np.array([[0], [1]])
+    y_pred = np.array([[0.9, 0.1], [0.1, 0.9]])
+    metrics = compute_ogb_graph_metrics(
+        y_true, y_pred, dataset_name="ogbg-molhiv"
+    )
+    assert metrics["rocauc"] == 0.85
+    assert metrics["accuracy"] == 0.75
+    assert metrics["macro_f1"] == 0.80
 
 
 @pytest.fixture
@@ -119,3 +131,25 @@ def test_ogb_node_metrics(mock_node_evaluator):
     assert metrics["accuracy"] == 0.90
     assert metrics["macro_f1"] == 0.85
     mock_node_evaluator.eval.assert_called_once()
+
+
+def test_binary_with_2d_scores():
+    # y_true is binary, but y_pred is shape (n,2)
+    y_true = np.array([0, 1, 0, 1])
+    # second column is "positive" score
+    y_pred = np.vstack([1-y_true, y_true]).T
+    metrics = compute_generic_classification(
+        y_true, y_pred, is_multiclass=False
+    )
+    # Should compute auroc on the positive column
+    assert "auroc" in metrics
+    assert 0.0 <= metrics["auroc"] <= 1.0
+
+
+def test_no_topk_on_binary_2d():
+    y_true = np.array([0, 1, 0])
+    y_pred = np.array([[0.8, 0.2], [0.1, 0.9], [0.7, 0.3]])
+    metrics = compute_generic_classification(
+        y_true, y_pred, is_multiclass=False
+    )
+    assert not any(k.startswith("top_") for k in metrics)

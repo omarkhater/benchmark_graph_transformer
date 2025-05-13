@@ -3,3 +3,9 @@ defaults:
 
 type: SAGE
 task: graph
+
+training:
+  mlflow:
+    run_name: SAGE-Basic
+    description: |
+      GraphSAGE with basic settings.

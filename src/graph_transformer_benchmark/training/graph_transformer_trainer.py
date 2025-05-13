@@ -43,6 +43,8 @@ class GraphTransformerTrainer(BaseTrainer):
         "micro_f1",
         "weighted_f1",
         "balanced_accuracy",
+        "auprc",
+        "auroc",
         }
     lower_is_better = {"loss", "mse", "rmse", "mae"}
 

@@ -10,6 +10,8 @@ from __future__ import annotations
 import mlflow
 import torch
 from omegaconf import DictConfig
+import logging
+import traceback
 
 from graph_transformer_benchmark.data import build_dataloaders
 from graph_transformer_benchmark.graph_models import build_model
@@ -50,52 +52,67 @@ def run_training(cfg: DictConfig) -> float:
     float
         Best validation loss observed during training.
     """
-    set_seed(cfg.training.seed)
-    global _GLOBAL_SEED
-    _GLOBAL_SEED = cfg.training.seed
+    try:
+        set_seed(cfg.training.seed)
+        global _GLOBAL_SEED
+        _GLOBAL_SEED = cfg.training.seed
 
-    configure_determinism(cfg.training.seed, torch.cuda.is_available())
+        configure_determinism(cfg.training.seed, torch.cuda.is_available())
 
-    init_mlflow(cfg)
-    run_name = cfg.model.training.mlflow.run_name or build_run_name(cfg)
-    with mlflow.start_run(run_name=run_name):
-        mlflow.set_tag(
-            "mlflow.note.content", cfg.model.training.mlflow.description)
-        log_config(cfg)
-
-        generator = torch.Generator().manual_seed(cfg.training.seed)
-        train_loader, val_loader, test_loader = build_dataloaders(
-            cfg,
-            generator=generator,
-            worker_init_fn=worker_init_fn,
+        init_mlflow(cfg)
+        run_name = getattr(cfg.model.training.mlflow, "run_name", None)
+        description = getattr(
+            cfg.model.training.mlflow, "description", None
         )
+        if run_name is None:
+            run_name = build_run_name(cfg)
+        with mlflow.start_run(run_name=run_name):
+            mlflow.set_tag("mlflow.note.content", description)
+            log_config(cfg)
 
-        for split, loader in (
-            ("train", train_loader),
-            ("val", val_loader),
-            ("test", test_loader),
-        ):
-            log_dataset_stats(loader, split, log_to_mlflow=True)
+            generator = torch.Generator().manual_seed(cfg.training.seed)
+            train_loader, val_loader, test_loader = build_dataloaders(
+                cfg,
+                generator=generator,
+                worker_init_fn=worker_init_fn,
+            )
 
-        device = get_device(cfg.training.device)
-        num_features = infer_num_node_features(train_loader)
-        num_classes = infer_num_classes(train_loader)
-        model = build_model(cfg.model, num_features, num_classes).to(device)
-        model = BatchEnrichedModel(model, cfg.model)
-        optimizer = torch.optim.Adam(model.parameters(), lr=cfg.training.lr)
+            for split, loader in (
+                ("train", train_loader),
+                ("val", val_loader),
+                ("test", test_loader),
+            ):
+                log_dataset_stats(loader, split, log_to_mlflow=True)
 
-        trainer = GraphTransformerTrainer(
-            cfg=cfg,
-            model=model,
-            train_loader=train_loader,
-            val_loader=val_loader,
-            test_loader=test_loader,
-            optimizer=optimizer,
-            device=device,
-            num_epochs=cfg.training.epochs,
-            val_frequency=cfg.training.val_frequency,
-            patience=cfg.training.patience,
+            device = get_device(cfg.training.device)
+            num_features = infer_num_node_features(train_loader)
+            num_classes = infer_num_classes(train_loader)
+            model = build_model(cfg.model, num_features, num_classes).to(device)
+            model = BatchEnrichedModel(model, cfg.model, device).to(device)
+            optimizer = torch.optim.Adam(model.parameters(), lr=cfg.training.lr)
+
+            trainer = GraphTransformerTrainer(
+                cfg=cfg,
+                model=model,
+                train_loader=train_loader,
+                val_loader=val_loader,
+                test_loader=test_loader,
+                optimizer=optimizer,
+                device=device,
+                num_epochs=cfg.training.epochs,
+                val_frequency=cfg.training.val_frequency,
+                patience=cfg.training.patience,
+            )
+
+            _, metrics = trainer.train()
+            return float(metrics.get("best_loss", float("nan")))
+    except Exception as e:
+        logging.error(
+            f"Training failed with exception: {e}",
+            exc_info=True,
         )
-
-        _, metrics = trainer.train()
-        return float(metrics.get("best_loss", float("nan")))
+        mlflow.log_param("training_status", "failed")
+        mlflow.log_param("exception", str(e))
+        mlflow.log_param("exception_type", type(e).__name__)
+        mlflow.log_param("traceback", traceback.format_exc())
+    return 0.0
