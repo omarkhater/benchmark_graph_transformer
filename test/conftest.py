@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import mlflow
 import pytest
 import torch
+from ogb.graphproppred import PygGraphPropPredDataset
 from omegaconf import DictConfig, OmegaConf
 from torch import Tensor
 from torch.nn import Module, Parameter
@@ -376,19 +377,58 @@ def ogb_graph_dataset():
     Fixtures a MagicMock OGB graph-level dataset with three sample graphs
     and explicit train/valid/test splits.
     """
-    mock_ds = MagicMock()
-    # three sample graphs
-    g1 = Data(x=torch.randn(2, 5), edge_index=torch.tensor([[0], [1]]))
-    g2 = Data(x=torch.randn(3, 5), edge_index=torch.tensor([[0, 1], [1, 2]]))
-    g3 = Data(x=torch.randn(4, 5), edge_index=torch.tensor([[0, 2], [2, 3]]))
+    mock_ds = MagicMock(spec=PygGraphPropPredDataset)
+
+    # Create sample graphs with all required attributes
+    g1 = Data(
+        x=torch.randn(2, 5),
+        edge_index=torch.tensor([[0], [1]]),
+        edge_attr=torch.randn(1, 4),
+        y=torch.tensor([[0]])
+    )
+    g2 = Data(
+        x=torch.randn(3, 5),
+        edge_index=torch.tensor([[0, 1], [1, 2]]),
+        edge_attr=torch.randn(2, 4),
+        y=torch.tensor([[1]])
+    )
+    g3 = Data(
+        x=torch.randn(4, 5),
+        edge_index=torch.tensor([[0, 2], [2, 3]]),
+        edge_attr=torch.randn(2, 4),
+        y=torch.tensor([[1]])
+    )
     graphs = [g1, g2, g3]
+
+    # Mock get_idx_split to return proper indices
     mock_ds.get_idx_split.return_value = {
         "train": torch.tensor([0]),
         "valid": torch.tensor([1]),
-        "test":  torch.tensor([2]),
+        "test": torch.tensor([2])
     }
-    mock_ds.__getitem__.side_effect = lambda idx: graphs[idx]
+
+    # Mock data loading behavior
+    mock_ds.data = graphs[0]  # First graph as data
+    mock_ds.slices = None  # Not needed for our test
+
+    # Handle __getitem__ directly without file loading
+    def getitem(idx):
+        if isinstance(idx, (list, torch.Tensor)):
+            if isinstance(idx, torch.Tensor):
+                idx = idx.tolist()
+            return [graphs[i] for i in idx]
+        if isinstance(idx, slice):
+            return graphs[idx]
+        return graphs[idx]
+
+    mock_ds.__getitem__.side_effect = getitem
     mock_ds.__len__.return_value = len(graphs)
+
+    # Mock OGB-specific attributes
+    mock_ds.num_tasks = 1
+    mock_ds.task_type = "binary classification"
+    mock_ds.eval_metric = "rocauc"
+
     return mock_ds, graphs
 
 
