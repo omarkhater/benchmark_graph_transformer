@@ -6,7 +6,7 @@ from typing import Tuple
 from ogb.graphproppred import PygGraphPropPredDataset
 from ogb.nodeproppred import PygNodePropPredDataset
 from torch_geometric.data import Data, Dataset
-from torch_geometric.datasets import Planetoid, TUDataset
+from torch_geometric.datasets import Planetoid, TUDataset, ZINC, QM7b
 from torch_geometric.loader import DataLoader
 
 DataLoaders = Tuple[DataLoader, DataLoader, DataLoader]
@@ -67,4 +67,8 @@ def get_dataset(name: str, root: Path) -> Dataset:
         return TUDataset(root=str(root / "TUD"), name=key.upper())
     if key in {"cora", "citeseer", "pubmed"}:
         return Planetoid(root=str(root / "Planetoid"), name=key.capitalize())
+    if key == "zinc":
+        return ZINC(root=str(root / "ZINC"))
+    if key == "qm7b":
+        return QM7b(root=str(root / "QM7b"))
     raise ValueError(f"Unsupported dataset '{name}'.")
