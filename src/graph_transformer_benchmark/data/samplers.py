@@ -93,16 +93,23 @@ def loader_factory(
     # ── ClusterLoader ────────────────────────────────────────────────────
     if sampler_type == "cluster":
         num_parts: int = sampler_kw.pop("num_parts")
-        cluster_data = ClusterData(data, num_parts=num_parts, **sampler_kw)
+        cluster_data = ClusterData(
+            data, 
+            num_parts=num_parts, 
+            **sampler_kw
+        )
 
         def make(_mask, shuffle: bool) -> DataLoader:
+            cluster_loader_kwargs = {
+                k: v for k, v in extra_dl_kw.items() 
+                if k != 'transform'
+            }
             return ClusterLoader(
                 cluster_data,
                 batch_size=batch_size,
                 shuffle=shuffle,
                 num_workers=num_workers,
-                transform=flag_single_graph,
-                **extra_dl_kw,
+                **cluster_loader_kwargs,
             )
 
         return make
