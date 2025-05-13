@@ -154,8 +154,11 @@ def _prob_metrics(
     out: MetricDict = {}
     is_binary = (not is_multiclass) or np.unique(y_true).size == 2
     if is_binary:
-        auroc = _safe_call(roc_auc_score, y_true, y_pred)
-        auprc = _safe_call(average_precision_score, y_true, y_pred)
+        # In two columns, the second column is the positive class
+        # In one column, the positive class is the only column
+        y_score = y_pred[:, 1] if y_pred.ndim > 1 else y_pred
+        auroc = _safe_call(roc_auc_score, y_true, y_score)
+        auprc = _safe_call(average_precision_score, y_true, y_score)
         if auroc is not None:
             out["auroc"] = auroc
         if auprc is not None:

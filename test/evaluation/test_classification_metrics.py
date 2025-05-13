@@ -119,3 +119,15 @@ def test_ogb_node_metrics(mock_node_evaluator):
     assert metrics["accuracy"] == 0.90
     assert metrics["macro_f1"] == 0.85
     mock_node_evaluator.eval.assert_called_once()
+
+def test_binary_with_2d_scores():
+    # y_true is binary, but y_pred is shape (n,2)
+    y_true = np.array([0, 1, 0, 1])
+    # second column is "positive" score
+    y_pred = np.vstack([1-y_true, y_true]).T  
+    metrics = compute_generic_classification(
+        y_true, y_pred, is_multiclass=False
+    )
+    # Should compute auroc on the positive column
+    assert "auroc" in metrics
+    assert 0.0 <= metrics["auroc"] <= 1.0
