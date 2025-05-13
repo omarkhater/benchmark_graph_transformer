@@ -57,7 +57,9 @@ def run_training(cfg: DictConfig) -> float:
     configure_determinism(cfg.training.seed, torch.cuda.is_available())
 
     init_mlflow(cfg)
-    run_name = cfg.model.training.mlflow.run_name or build_run_name(cfg)
+    run_name = getattr(cfg.model.training.mlflow, "run_name", None)
+    if run_name is None:
+        run_name = build_run_name(cfg)
     with mlflow.start_run(run_name=run_name):
         mlflow.set_tag(
             "mlflow.note.content", cfg.model.training.mlflow.description)
