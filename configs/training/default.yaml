@@ -1,6 +1,6 @@
 device: cpu
 lr: 1e-3
-epochs: 15
+epochs: 30
 seed: 42
 n_trials: 10 # Number of Optuna trials
 val_frequency: 3
