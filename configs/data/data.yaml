@@ -24,4 +24,4 @@ sampler:
 
   # ---------- cluster-sampler specific --------------------------------------
   # Only read when type == "cluster"
-  # num_parts: 50               # METIS partitions
+  num_parts: 50               # METIS partitions

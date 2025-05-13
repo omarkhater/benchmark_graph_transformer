@@ -3,3 +3,9 @@ defaults:
 
 type: GAT
 task: graph
+
+training:
+  mlflow:
+    run_name: GAT-Basic
+    description: |
+      Graph Attention Network (GAT) with basic settings.

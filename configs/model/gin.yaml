@@ -3,4 +3,9 @@ defaults:
 
 type: GIN
 task: graph
-# GIN uses the same hidden_dim, batch_norm and residual flags
+
+training:
+  mlflow:
+    run_name: GIN-Basic
+    description: |
+      Graph Isomorphism Network (GIN) with basic settings.
