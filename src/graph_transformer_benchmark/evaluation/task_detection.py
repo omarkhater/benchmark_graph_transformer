@@ -1,13 +1,19 @@
 """Task type detection utilities."""
 
 import logging
-from typing import Union
+from typing import Any, Iterable, Union
 
 import torch
 from torch_geometric.data import Batch, Data
 from torch_geometric.loader import DataLoader
 
 from .types import TaskType
+
+try:
+    from torch_geometric.loader import ClusterLoader, NeighborLoader
+except Exception:
+    NeighborLoader = ClusterLoader = tuple()
+
 
 logger = logging.getLogger(__name__)
 
@@ -53,61 +59,111 @@ def _is_graph_level_task(batch: Union[Data, Batch]) -> bool:
     """Determine if task is graph-level based on data structure.
 
     More reliable detection using target/feature dimensions and ptr/batch.
+
+    Parameters
+    ----------
+    batch : Union[Data, Batch]
+        Data or Batch object to inspect
+    Returns
+    -------
+    bool
+        True if task is graph-level, False otherwise
     """
     if not hasattr(batch, 'batch'):
         # Single graph case
         return batch.y.size(0) == 1
 
-    # Get number of graphs in batch
     num_graphs = int(batch.batch.max()) + 1
     # True if number of targets matches number of graphs
     return batch.y.size(0) == num_graphs
 
 
-def is_multiclass_task(loader: DataLoader) -> bool:
-    """Determine whether a DataLoader’s task is multiclass classification.
-
-    Returns False immediately for regression (float targets),
-    otherwise returns True if there are more than two classes.
-
-    Strategy:
-    1. Peek at the first example’s `y.dtype` to detect regression (float).
-    2. If `dataset.num_classes` exists, use it.
-    3. Otherwise scan all integer labels to count unique values.
+def _grab_first(source: Any) -> Data:
+    """Return the first ``Data`` object from source.
 
     Parameters
     ----------
-    loader : DataLoader
-        A PyG DataLoader wrapping a dataset.
-
+    source : Any
+        Source object to extract the first Data from.
     Returns
     -------
-    bool
-        True if this is multiclass classification (>2 classes), else False.
+    Data
+        The first Data object from the source.
+    Raises
+    ------
+    TypeError
+        If the source is not a supported type.
     """
-    dataset = loader.dataset
+    if isinstance(source, Data):
+        return source
 
-    # 1) Regression check: float targets → not multiclass classification
-    first = dataset[0]
+    if isinstance(source, (DataLoader, NeighborLoader, ClusterLoader)):
+        return next(iter(source))
+
+    if hasattr(source, "__getitem__"):  # Dataset-like
+        return source[0]  # type: ignore[index]
+
+    raise TypeError(f"Unsupported type for task detection: {type(source)}")
+
+
+def _iter_datas(source: Any) -> Iterable[Data]:
+    """Yield ``Data`` objects from *dataset* or *loader*.
+
+    Parameters
+    ----------
+    source : Any
+        Source object to iterate over.
+    Yields
+    ------
+    Data
+        The Data objects from the source.
+    Raises
+    ------
+    TypeError
+        If the source is not a supported type.
+
+    """
+    if isinstance(source, (DataLoader, NeighborLoader, ClusterLoader)):
+        yield from iter(source)
+    elif hasattr(source, "__iter__"):
+        yield from source
+    else:
+        yield source
+
+
+def is_multiclass_task(source: Any) -> bool:
+    """Return **True** if the classification task has **> 2 classes**.
+
+    Accepts a single ``Data`` object, a *Dataset*, or any PyG
+    ``DataLoader`` (incl. ``NeighborLoader`` / ``ClusterLoader``).
+
+    Heuristics
+    ----------
+    1. *Regression* – if the target dtype is floating-point → **False**.
+    2. *Metadata*   – if the underlying dataset carries ``num_classes``.
+    3. *Fallback*   – scan all integer targets and count unique labels.
+    """
+    # ── 1) peek at first target ------------------------------------------ #
+    first = _grab_first(source)
     y0 = first.y
-    # If y0 is a tensor of shape (N, C), squeeze to 1D
-    if y0.ndim > 1 and y0.shape[1] == 1:
+    if y0.ndim > 1 and y0.shape[1] == 1:  # shape (N,1) → (N,)
         y0 = y0.squeeze(1)
-    if y0.dtype in (torch.float32, torch.float64):
-        return False
+    if y0.is_floating_point():
+        return False  # regression
 
-    # 2) Use dataset metadata if present
+    # ── 2) use dataset metadata if available ----------------------------- #
+    dataset = getattr(source, "dataset", source)  # DataLoader → Dataset
     num_classes = getattr(dataset, "num_classes", None)
-    if num_classes is not None:
+    if isinstance(num_classes, int):
         return num_classes > 2
 
-    # 3) Fallback: scan entire dataset to count unique integer labels
-    all_labels = []
-    for data in dataset:
+    # ── 3) brute-force unique label count -------------------------------- #
+    uniq: set[int] = set()
+    for data in _iter_datas(source):
         y = data.y
         if y.ndim > 1 and y.shape[1] == 1:
             y = y.squeeze(1)
-        all_labels.append(y.view(-1))
-    all_labels = torch.cat(all_labels)
-    unique_count = int(torch.unique(all_labels).numel())
-    return unique_count > 2
+        uniq.update(int(v) for v in y.view(-1))
+        if len(uniq) > 2:  # early-exit
+            return True
+    return len(uniq) > 2

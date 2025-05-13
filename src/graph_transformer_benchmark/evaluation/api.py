@@ -8,7 +8,7 @@ from ogb.graphproppred import Evaluator as GraphEvaluator
 from ogb.nodeproppred import Evaluator as NodeEvaluator
 from omegaconf import DictConfig
 from torch import nn
-from torch_geometric.loader import DataLoader
+from torch.utils.data import DataLoader
 
 from .classification_metrics import (
     compute_generic_classification,
@@ -108,7 +108,7 @@ def evaluate(
             ogb_scores = evaluator.eval(
                 {"y_true": y_true, "y_pred": y_pred}
             )
-        else:  # TaskType.NODE_CLASSIFICATION
+        else:
             evaluator = NodeEvaluator(name=dataset_name)
             preds = (
                 y_pred.argmax(axis=-1) if y_pred.ndim > 1 else y_pred

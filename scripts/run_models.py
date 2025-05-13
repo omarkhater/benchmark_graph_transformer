@@ -3,15 +3,21 @@
 Run one training job per model variant on a single dataset.
 
 Usage:
-    python scripts/run_models.py \
-        --dataset PubMed \
-        --models variants/basic,variants/full,sage \
-        --seed 2025 \
-        --device cuda \
-        --exp-name my_first_bench
+    python scripts/run_models.py \\
+      --dataset PubMed \\
+      --models variants/basic,variants/full,sage \\
+      --seed 2025 \\
+      --device cuda \\
+      --exp-name my_first_bench \\
+      -- \\
+      data.use_subgraph_sampler=true \\
+      data.sampler.type=neighbor \\
+      data.batch_size=128 \\
+      data.sampler.num_neighbors=[5,5]
 """
 import argparse
 import subprocess
+from typing import List
 
 
 def get_task_kind(name: str) -> str:
@@ -22,7 +28,7 @@ def get_task_kind(name: str) -> str:
     return "graph"
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run single-shot training for multiple model variants"
     )
@@ -31,10 +37,9 @@ def main():
         help="Dataset name (e.g. MUTAG, Cora, ogbn-arxiv)"
     )
     parser.add_argument(
-        "--models",
-        "-m",
+        "--models", "-m",
         default="variants/basic,variants/bias,variants/pos,"
-        "variants/full,variants/gnn,sage",
+                "variants/full,variants/gnn,sage",
         help="Comma-separated list of model configs"
     )
     parser.add_argument(
@@ -42,7 +47,7 @@ def main():
         help="Random seed (default: 42)"
     )
     parser.add_argument(
-        "--device", default="cpu",
+        "--device", "-D", default="cpu",
         choices=["cpu", "cuda"],
         help="Device to train on (cpu or cuda)"
     )
@@ -50,7 +55,9 @@ def main():
         "--exp-name", "-e", default="benchmark_simple",
         help="MLflow experiment name"
     )
-    args = parser.parse_args()
+
+    # parse_known_args lets us collect any trailing Hydra overrides (key=val)
+    args, overrides = parser.parse_known_args()
 
     task = get_task_kind(args.dataset)
     model_list = [m.strip() for m in args.models.split(",") if m.strip()]
@@ -62,22 +69,31 @@ def main():
 
     for model in model_list:
         print(f"─➤ Model: {model}")
-        cmd = [
-            "poetry", "run", "python", "-m", "graph_transformer_benchmark.cli",
+        # Base Hydra overrides
+        cmd: List[str] = [
+            "poetry", "run", "python", "-m",
+            "graph_transformer_benchmark.cli",
             f"data.dataset={args.dataset}",
             f"model={model}",
             f"model.task={task}",
             f"training.device={args.device}",
+            f"training.seed={args.seed}",
             f"training.mlflow.experiment_name={args.exp_name}",
         ]
+        # Append any extra overrides after the "--"
+        if overrides:
+            cmd.extend(overrides)
+
         print(">", " ".join(cmd))
-        result = subprocess.run(cmd)
+        # capture both stdout and stderr for reporting
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
         if result.returncode == 0:
             print(f"✔ Completed {model}\n")
         else:
             print(f"✘ Failed   {model}")
-            print("STDOUT>", result.stdout.strip())
-            print("STDERR>", result.stderr.strip())
+            print("STDOUT>\n", result.stdout.strip())
+            print("STDERR>\n", result.stderr.strip())
             print()  # blank line
 
     print("✅ All models processed.")

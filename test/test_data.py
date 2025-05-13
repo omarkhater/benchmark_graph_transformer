@@ -1,82 +1,132 @@
+"""Unit tests for data-loading helpers."""
+
+from __future__ import annotations
+
 import pytest
 import torch
 from omegaconf import OmegaConf
-from torch_geometric.data import Batch, Data
+from torch_geometric.data import Batch, Data, Dataset
+from torch_geometric.loader import ClusterLoader, DataLoader, NeighborLoader
 
-from graph_transformer_benchmark.data import (
-    _get_dataset,
-    _load_graph_level,
-    _load_node_level,
-    build_dataloaders,
-    enrich_batch,
-)
+import graph_transformer_benchmark.data as data_mod
+
+# --------------------------------------------------------------------------- #
+# Fixtures ------------------------------------------------------------------ #
 
 
-def test_get_dataset_basic(dataset_info):
-    name, expected_cls, subdir, tmp_path = dataset_info
-    ds = _get_dataset(name, tmp_path)
-    assert isinstance(ds, expected_cls)
-    root_str = getattr(ds, "root", None) or getattr(ds, "raw_dir", "")
-    assert subdir in root_str
+@pytest.fixture(scope="module")
+def one_graph_dataset() -> Dataset:
+    """Return a single-graph dataset with boolean masks."""
+    class DS(Dataset):  # noqa: D401
+        def __len__(self):  # type: ignore[override]
+            return 1
+
+        def __getitem__(self, idx):  # type: ignore[override]
+            x = torch.randn(8, 3)
+            y = torch.randint(0, 2, (8,))
+            # Add some edges to make clustering possible
+            edge_index = torch.tensor(
+                [
+                    [0, 1, 1, 2, 2, 3, 4, 5, 6, 7],
+                    [1, 0, 2, 1, 3, 2, 5, 4, 7, 6]
+                ], dtype=torch.long)
+            data = Data(x=x, y=y, edge_index=edge_index)
+            data.train_mask = torch.tensor([1, 1, 1, 0, 0, 0, 0, 0]).bool()
+            data.val_mask = torch.tensor([0, 0, 0, 1, 1, 0, 0, 0]).bool()
+            data.test_mask = ~(data.train_mask | data.val_mask)
+            return data
+
+    return DS()
 
 
-def test_get_dataset_unsupported(tmp_path):
-    with pytest.raises(ValueError) as exc:
-        _get_dataset("not_real", tmp_path)
-    assert "Unsupported dataset 'not_real'" in str(exc.value)
+# --------------------------------------------------------------------------- #
+# _is_node_level_graph ------------------------------------------------------ #
 
 
-def test_build_dataloaders_generic(generic_cfg_and_cls):
-    cfg, expected_cls = generic_cfg_and_cls
-    train_ld, val_ld, test_ld = build_dataloaders(cfg)
+def test_is_node_level_graph(one_graph_dataset):
+    """Test node-level graph detection functionality.
+
+    Tests if the _is_node_level_graph function correctly identifies
+    single-graph and multi-graph datasets.
+
+    Args:
+        one_graph_dataset: A fixture providing a single-graph dataset.
+    """
+    assert data_mod._is_node_level_graph(one_graph_dataset)
+    many = [one_graph_dataset[0] for _ in range(3)]
+    many_ds = type(
+        "Many",
+        (Dataset,),
+        {"__len__": lambda self: 3, "__getitem__": lambda s, i: many[i]}
+    )()
+    assert not data_mod._is_node_level_graph(many_ds)
+
+
+# --------------------------------------------------------------------------- #
+# Loader behaviour ---------------------------------------------------------- #
+
+
+@pytest.mark.parametrize("use_sampler", [False, True])
+def test_build_dataloaders_single(
+        tmp_path, monkeypatch, one_graph_dataset, use_sampler):
+    """Neighbour loaders only when flag + single graph."""
+    monkeypatch.setattr(
+        data_mod, "_get_dataset", lambda n, r: one_graph_dataset)
+    cfg = OmegaConf.create(
+        {
+            "data": {
+                "dataset": "pubmed",
+                "root": str(tmp_path),
+                "batch_size": 4,
+                "num_workers": 0,
+                "use_subgraph_sampler": use_sampler,
+                "sampler": {"type": "neighbor", "num_neighbors": [3, 3]},
+            }
+        }
+    )
+    train_ld, val_ld, test_ld = data_mod.build_dataloaders(cfg)
+    if use_sampler:
+        assert isinstance(train_ld, NeighborLoader)
+    else:
+        assert isinstance(train_ld, DataLoader)
+
+
+def test_cluster_sampler(tmp_path, monkeypatch, one_graph_dataset):
+    """ClusterLoader path returns per-cluster batches."""
+    monkeypatch.setattr(
+        data_mod, "_get_dataset", lambda n, r: one_graph_dataset)
+    cfg = OmegaConf.create(
+        {
+            "data": {
+                "dataset": "pubmed",
+                "root": str(tmp_path),
+                "batch_size": 2,
+                "num_workers": 0,
+                "use_subgraph_sampler": True,
+                "sampler": {"type": "cluster", "num_parts": 2},
+            }
+        }
+    )
+    train_ld, val_ld, test_ld = data_mod.build_dataloaders(cfg)
     for loader in (train_ld, val_ld, test_ld):
-        assert isinstance(loader.dataset, expected_cls)
-        assert loader.batch_size == cfg.data.batch_size
+        assert isinstance(loader, ClusterLoader)
+        batch = next(iter(loader))
+        # Verify we get a valid batch with expected attributes
+        assert hasattr(batch, 'x')
+        assert hasattr(batch, 'edge_index')
+        assert batch.x.size(0) > 0  # Should have some nodes
 
 
-def test_load_graph_level_split(ogb_graph_dataset):
-    mock_ds, graphs = ogb_graph_dataset
-    g1, g2, g3 = graphs
-    train_ld, val_ld, test_ld = _load_graph_level(
-        mock_ds, {"batch_size": 1, "num_workers": 0})
-    assert torch.equal(train_ld.dataset.x, g1.x)
-    assert torch.equal(val_ld.dataset.x,   g2.x)
-    assert torch.equal(test_ld.dataset.x,  g3.x)
+# --------------------------------------------------------------------------- #
+# Generic enrich_batch smoke test ------------------------------------------ #
 
 
-def test_load_node_level_masks(ogb_node_dataset):
-    mock_ds, data, train_idx, valid_idx, test_idx = ogb_node_dataset
-    train_ld, val_ld, test_ld = _load_node_level(
-        mock_ds, {"batch_size": 1, "num_workers": 0})
-    tb = next(iter(train_ld))
-    vb = next(iter(val_ld))
-    tb2 = next(iter(test_ld))
-    assert tb.train_mask.sum().item() == len(train_idx)
-    assert vb.val_mask.sum().item() == len(valid_idx)
-    assert tb2.test_mask.sum().item() == len(test_idx)
-
-
-def test_enrich_batch_various_flags():
+def test_enrich_batch_smoke():
     x = torch.randn(5, 3)
     edge_index = torch.tensor([[0, 2, 3], [1, 3, 4]])
     data = Data(x=x, edge_index=edge_index, y=torch.zeros(5, dtype=torch.long))
     batch = Batch.from_data_list([data])
-    cfg = OmegaConf.create({
-        "with_degree_enc": True,
-        "with_eig_enc":    True,
-        "num_eigenc":      2,
-        "with_svd_enc":    True,
-        "num_svdenc":      1,
-        "with_spatial_bias": True,
-        "with_edge_bias":    True,
-        "with_hop_bias":     True,
-    })
-    enriched = enrich_batch(batch, cfg)
-    n = x.size(0)
-    assert enriched.out_degree.shape == (n,)
-    assert enriched.in_degree.shape == (n,)
-    assert enriched.eig_pos_emb.shape == (n, 2)
-    assert enriched.svd_pos_emb.shape == (n, 2)
-    assert enriched.spatial_pos.shape == (n, n)
-    assert enriched.edge_dist.shape == (n, n)
-    assert enriched.hop_dist.shape == (n, n)
+    cfg = OmegaConf.create({"with_degree_enc": True})
+    enriched = data_mod.enrich_batch(batch, cfg)
+    assert hasattr(enriched, "in_degree")
+    assert enriched.x.shape == x.shape

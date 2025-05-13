@@ -49,8 +49,22 @@ def log_dataset_stats(
     n_edges: list[int] = []
     for i in range(num_graphs):
         g = ds[i]
-        n_nodes.append(int(g.num_nodes))
-        n_edges.append(int(g.edge_index.size(1)))
+        # Handle different ways to get number of nodes
+        if hasattr(g, 'num_nodes'):
+            num_nodes = int(g.num_nodes)
+        elif hasattr(g, 'x'):
+            num_nodes = int(g.x.size(0))
+        else:
+            num_nodes = int(g)  # For some samplers that return node indices
+
+        # Handle different ways to get number of edges
+        if hasattr(g, 'edge_index'):
+            num_edges = int(g.edge_index.size(1))
+        else:
+            num_edges = 0  # Default if no edge information available
+
+        n_nodes.append(num_nodes)
+        n_edges.append(num_edges)
 
     def _basic_stats(vals: list[int]) -> tuple[float, int, int]:
         return (statistics.mean(vals), min(vals), max(vals))

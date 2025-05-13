@@ -1,3 +1,27 @@
-dataset: MUTAG
-batch_size: 32
+# conf/data.yaml  ──────────────────────────────────────────────────────────────
+dataset: pubmed              # Cora, CiteSeer, PubMed, ogbn-*  …
+root: data
+batch_size: 512              # seeds per iteration (for neighbour sampler)
 num_workers: 4
+
+# --------------------------------------------------------------------------- #
+# Random split ratios (used only when we do *not* sub-sample)
+val_ratio: 0.1
+test_ratio: 0.1
+
+# --------------------------------------------------------------------------- #
+# Sub-graph sampling (works for any single-graph node dataset)
+use_subgraph_sampler: true    # <- set to false to train on the full graph
+sampler:
+  # Pick one of ["neighbor", "cluster"]
+  type: neighbor
+
+  # ---------- neighbour-sampler specific ------------------------------------
+  # List with one entry per GNN / Transformer layer
+  num_neighbors: [10, 10]     # 10 neighbours at hop-1 and hop-2
+  # disjoint = true guarantees .batch is created (default in PyG ≥ 2.5)
+  disjoint: true
+
+  # ---------- cluster-sampler specific --------------------------------------
+  # Only read when type == "cluster"
+  # num_parts: 50               # METIS partitions
