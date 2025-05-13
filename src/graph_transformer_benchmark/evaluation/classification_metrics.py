@@ -32,6 +32,10 @@ Array = np.ndarray
 # Utility helpers
 # --------------------------------------------------------------------------- #
 
+def _ensure_1d(arr: np.ndarray) -> np.ndarray:
+    if arr.ndim == 2 and arr.shape[1] == 1:
+        return arr.reshape(-1)
+    return arr
 
 def _safe_call(func, *args, **kwargs) -> float | None:
     """Run function with given arguments and handle exceptions gracefully.
@@ -75,8 +79,6 @@ def _discrete_preds(
     ----------
     y_pred : ndarray
         Predicted probabilities or logits
-    is_multiclass : bool
-        If True, use argmax for predictions. If False, use thresholding
     threshold : float
         Decision threshold for binary/multilabel predictions
 
@@ -85,10 +87,9 @@ def _discrete_preds(
     ndarray
         Discrete class predictions
     """
-    if is_multiclass and y_pred.ndim > 1:
-        return y_pred.argmax(axis=-1)
-    # binary or multi-label → threshold
-    return (y_pred >= threshold).astype(int)
+    if y_pred.ndim > 1 and y_pred.shape[1] > 1:
+        return y_pred.argmax(axis=-1) 
+    return (y_pred >= threshold).astype(int).reshape(-1)
 
 
 def _prob_metrics(
@@ -276,13 +277,13 @@ def compute_generic_classification(
     >>> metrics['accuracy']
     1.0
     """
+    y_true = _ensure_1d(np.asarray(y_true))
     y_true = np.asarray(y_true)
     y_pred = np.asarray(y_pred)
-
     preds = _discrete_preds(
         y_pred, is_multiclass=is_multiclass, threshold=threshold
     )
-
+    preds = _ensure_1d(preds) 
     metrics = _core_metrics(y_true, preds)
 
     metrics.update(_prob_metrics(y_true, y_pred, is_multiclass=is_multiclass))
