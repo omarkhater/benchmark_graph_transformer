@@ -1,0 +1,152 @@
+# .github/workflows/ci.yml
+name: CI Tests
+
+"on":
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  # Assuming the pytorch_geometric dependency details from your README
+  # PLEASE VERIFY AND UPDATE THESE if they are incorrect for your setup
+  PYTORCH_GEOMETRIC_REPO: omarkhater/pytorch_geometric
+  PYTORCH_GEOMETRIC_REF: add_graph_transformer  # Branch/tag/commit for pytorch_geometric
+
+jobs:
+  build_docker:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read  # To checkout the repository
+      packages: write  # To push packages (Docker images) to GHCR
+      actions: read  # For GHA cache
+    outputs:
+      image_digest: ${{ steps.build_and_push.outputs.digest }}
+    steps:
+      - name: Checkout benchmark_graph_transformer (main repo)
+        uses: actions/checkout@v4
+        with:
+          path: benchmark_graph_transformer  # Checkout into a subdirectory
+
+      - name: Checkout pytorch_geometric (dependency repo)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PYTORCH_GEOMETRIC_REPO }}
+          ref: ${{ env.PYTORCH_GEOMETRIC_REF }}
+          path: pytorch_geometric  # Checkout into a sibling directory
+          # If pytorch_geometric is a private repository, you'll need a PAT
+          # token: ${{ secrets.PYTORCH_GEOMETRIC_PAT }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # This generates tags like 'sha-xxxxxxx', 'latest', 'branch-name', 'pr-number' etc.
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        id: build_and_push
+        uses: docker/build-push-action@v5
+        with:
+          context: .  # Build context is ${{ github.workspace }} (contains both checked-out repos)
+          file: ./benchmark_graph_transformer/Dockerfile  # Path to Dockerfile relative to context
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  test_normal:
+    name: Run Normal Tests
+    runs-on: ubuntu-latest
+    needs: build_docker
+    permissions:
+      contents: read  # To checkout the repository (for placing coverage reports)
+      packages: read  # To pull images from GHCR
+    steps:
+      - name: Checkout benchmark_graph_transformer (for coverage paths)
+        uses: actions/checkout@v4
+        with:
+          path: benchmark_graph_transformer
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create coverage directory
+        working-directory: ./benchmark_graph_transformer
+        run: mkdir -p coverage_reports
+
+      - name: Run normal tests
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/benchmark_graph_transformer/coverage_reports:/app/coverage_reports \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build_docker.outputs.image_digest }} \
+            sh -c "poetry run pytest -m 'not slow' --cov=src --cov-report=xml:/app/coverage_reports/coverage_normal.xml --cov-report=term-missing && echo 'Normal tests passed successfully!' || (echo 'Normal tests failed.' && exit 1)"
+
+      - name: Upload coverage for normal tests (optional)
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}  # Store in GitHub secrets if using Codecov
+          files: ./benchmark_graph_transformer/coverage_reports/coverage_normal.xml
+          flags: normaltests
+          fail_ci_if_error: false  # Optional: set to true to fail CI if Codecov upload fails
+
+  test_slow:
+    name: Run Slow Tests
+    runs-on: ubuntu-latest  # Consider self-hosted runner if GPUs are needed for slow tests
+    needs: build_docker
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout benchmark_graph_transformer (for coverage paths)
+        uses: actions/checkout@v4
+        with:
+          path: benchmark_graph_transformer
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create coverage directory
+        working-directory: ./benchmark_graph_transformer
+        run: mkdir -p coverage_reports
+
+      - name: Run slow tests
+        run: |
+          # If slow tests require GPU, add --gpus all (requires NVIDIA container toolkit on runner)
+          # e.g., docker run --rm --gpus all \\
+          docker run --rm \
+            -v ${{ github.workspace }}/benchmark_graph_transformer/coverage_reports:/app/coverage_reports \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build_docker.outputs.image_digest }} \
+            sh -c "poetry run pytest -m slow --cov=src --cov-append --cov-report=xml:/app/coverage_reports/coverage_slow.xml --cov-report=term-missing && echo 'Slow tests passed successfully!' || (echo 'Slow tests failed.' && exit 1)"
+
+      - name: Upload coverage for slow tests (optional)
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}  # Store in GitHub secrets if using Codecov
+          files: ./benchmark_graph_transformer/coverage_reports/coverage_slow.xml
+          flags: slowtests
+          fail_ci_if_error: false  # Optional
