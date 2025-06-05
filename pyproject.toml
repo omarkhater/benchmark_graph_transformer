@@ -38,7 +38,7 @@ torch-cluster = { version = "1.6.3",  source = "pyg_whl"}
 torch-spline-conv = { version = "1.2.2", source = "pyg_whl"}
 
 # ───── High-level PyG API (local checkout) ─────
-torch-geometric = { path = "../pytorch_geometric", develop = true }
+torch-geometric = { git = "https://github.com/omarkhater/pytorch_geometric.git", branch = "add_graph_transformer" }
 
 # ───── Pure-Python deps ─────
 mlflow               = "^2.22"
