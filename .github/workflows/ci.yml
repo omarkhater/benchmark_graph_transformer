@@ -44,6 +44,7 @@ jobs:
           name: coverage-normal
           path: .coverage.normal
           retention-days: 1
+        if: always() && hashFiles('.coverage.normal') != ''
 
   test-slow:
     name: Run Slow Tests
@@ -82,11 +83,13 @@ jobs:
           name: coverage-slow
           path: .coverage.slow
           retention-days: 1
+        if: always() && hashFiles('.coverage.slow') != ''
 
   sonar:
     name: SonarQube Analysis
     needs: [test-normal, test-slow]  # Wait for both test jobs to complete
     runs-on: ubuntu-latest
+    if: always() && (needs.test-normal.result == 'success' || needs.test-slow.result == 'success')
 
     steps:
       - uses: actions/checkout@v4
@@ -98,12 +101,14 @@ jobs:
         with:
           name: coverage-normal
           path: .
+        continue-on-error: true
 
       - name: Download slow coverage artifact
         uses: actions/download-artifact@v4
         with:
           name: coverage-slow
           path: .
+        continue-on-error: true
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -115,8 +120,22 @@ jobs:
 
       - name: Combine coverage data
         run: |
-          coverage combine .coverage.normal .coverage.slow
-          coverage xml -o coverage.xml
+          # Check which coverage files exist
+          coverage_files=""
+          if [ -f ".coverage.normal" ]; then
+            coverage_files="$coverage_files .coverage.normal"
+          fi
+          if [ -f ".coverage.slow" ]; then
+            coverage_files="$coverage_files .coverage.slow"
+          fi
+
+          if [ -n "$coverage_files" ]; then
+            coverage combine $coverage_files
+            coverage xml -o coverage.xml
+          else
+            echo "No coverage files found, creating empty coverage.xml"
+            echo '<?xml version="1.0" ?><coverage version="7.0" timestamp="0" lines-valid="0" lines-covered="0" line-rate="0" branches-covered="0" branches-valid="0" branch-rate="0" complexity="0"></coverage>' > coverage.xml
+          fi
 
       - name: SonarQube Scan
         uses: SonarSource/sonarcloud-github-action@master
