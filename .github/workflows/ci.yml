@@ -34,10 +34,9 @@ jobs:
 
       - name: Run normal tests
         run: |
-          poetry run pytest -m "not slow" \
+          COVERAGE_FILE=.coverage.normal poetry run pytest -m "not slow" \
             --cov=src \
-            --cov-report=term-missing \
-            --cov-data-file=.coverage.normal
+            --cov-report=term-missing
 
       - name: Upload coverage data
         uses: actions/upload-artifact@v4
@@ -73,10 +72,9 @@ jobs:
 
       - name: Run slow tests
         run: |
-          poetry run pytest -m slow \
+          COVERAGE_FILE=.coverage.slow poetry run pytest -m slow \
             --cov=src \
-            --cov-report=term-missing \
-            --cov-data-file=.coverage.slow
+            --cov-report=term-missing
 
       - name: Upload coverage data
         uses: actions/upload-artifact@v4
