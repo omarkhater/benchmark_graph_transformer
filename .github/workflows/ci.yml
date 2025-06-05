@@ -36,15 +36,15 @@ jobs:
         run: |
           poetry run pytest -m "not slow" \
             --cov=src \
-            --cov-report=xml:coverage-normal.xml \
-            --cov-report=term-missing
+            --cov-report=term-missing \
+            --cov-data-file=.coverage.normal
 
-      - name: Upload normal coverage
-        uses: codecov/codecov-action@v4
+      - name: Upload coverage data
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage-normal.xml
-          fail_ci_if_error: false
+          name: coverage-normal
+          path: .coverage.normal
+          retention-days: 1
 
   test-slow:
     name: Run Slow Tests
@@ -75,12 +75,53 @@ jobs:
         run: |
           poetry run pytest -m slow \
             --cov=src \
-            --cov-report=xml:coverage-slow.xml \
-            --cov-report=term-missing
+            --cov-report=term-missing \
+            --cov-data-file=.coverage.slow
 
-      - name: Upload slow coverage
-        uses: codecov/codecov-action@v4
+      - name: Upload coverage data
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage-slow.xml
-          fail_ci_if_error: false
+          name: coverage-slow
+          path: .coverage.slow
+          retention-days: 1
+
+  sonar:
+    name: SonarQube Analysis
+    needs: [test-normal, test-slow]  # Wait for both test jobs to complete
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Shallow clones should be disabled for better relevancy of analysis
+
+      - name: Download normal coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-normal
+          path: .
+
+      - name: Download slow coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-slow
+          path: .
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install coverage
+        run: pip install coverage
+
+      - name: Combine coverage data
+        run: |
+          coverage combine .coverage.normal .coverage.slow
+          coverage xml -o coverage.xml
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
