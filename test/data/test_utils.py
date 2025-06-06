@@ -85,3 +85,19 @@ def test_enrich_batch_no_encodings():
     assert not hasattr(enriched, "eig_pos_emb")
     assert not hasattr(enriched, "svd_pos_emb")
     assert not hasattr(enriched, "spatial_pos")
+
+
+def test_regression_none_x_enrichment_error(regression_none_x_loader):
+    """
+    Test that enrichment does not fail in regression tasks
+    when batch.x is None.
+    This is a specific case where the input features are not available,
+    but the edge information and targets are still present.
+    This test ensures that the enrichment function can handle such cases
+    """
+    batch = next(iter(regression_none_x_loader))
+    assert batch.x is None, "Test requires batch.x to be None"
+    assert batch.edge_index is not None, "Batch should have edge information"
+    assert batch.y is not None, "Batch should have regression targets"
+    cfg = OmegaConf.create({"with_degree_enc": True})
+    utils.enrich_batch(batch, cfg)

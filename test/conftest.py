@@ -178,6 +178,23 @@ def regression_loader() -> DataLoader:
 
 
 @pytest.fixture
+def regression_none_x_loader() -> DataLoader:
+    """Provide DataLoader for regression datasets with None node features.
+
+    This fixture reproduces the structure found in some regression datasets
+    where batch.x is None but edge_index and regression targets exist.
+    This is needed to test edge cases in data enrichment functions.
+    """
+    # Create graph with None node features (like QM7b dataset)
+    graph = Data(
+        x=None,  # This is the key condition that causes issues
+        edge_index=torch.tensor([[0, 1], [1, 0]], dtype=torch.long),
+        y=torch.tensor([42.5])  # float regression target
+    )
+    return DataLoader([graph], batch_size=1)
+
+
+@pytest.fixture
 def cfg_graph() -> DictConfig:
     """Provide a DictConfig for an OGB graph‐level dataset."""
     return OmegaConf.create({"data": {"dataset": "ogbg-molhiv"}})
