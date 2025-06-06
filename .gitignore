@@ -3,9 +3,23 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Poetry & env
+# Poetry & environments
 poetry.lock
 .env
+.venv/
+venv/
+env/
+ENV/
+*env/
+.Python
+[Bb]in
+[Ii]nclude
+[Ll]ib
+[Ll]ib64
+[Ll]ocal
+[Ss]cripts
+pyvenv.cfg
+.python-version
 
 # PyTorch & MLflow
 mlruns/
@@ -28,3 +42,5 @@ summary_commands.md
 .coverage
 /runs
 summary_commands.sh
+.github/coding-instructions.md
+.github/test-instructions.md
