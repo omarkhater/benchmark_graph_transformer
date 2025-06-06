@@ -100,8 +100,6 @@ class DummyTrainLoader:
 @pytest.fixture(autouse=True)
 def patch_ogb_evaluators(monkeypatch: Any) -> Generator[None, None, None]:
     """Monkeypatch OGB Evaluators to use dummy implementations."""
-    # monkeypatch.setattr(eval_mod, "GraphEvaluator", DummyGraphEvaluator)
-    # monkeypatch.setattr(eval_mod, "NodeEvaluator", DummyNodeEvaluator)
     yield
 
 
@@ -212,7 +210,8 @@ def cfg_data() -> DictConfig:
 @pytest.fixture
 def optimizer(dummy_model: DummyModel) -> SGD:
     """Provide an SGD optimizer for the dummy_model."""
-    return SGD(dummy_model.parameters(), lr=0.1)
+    return SGD(
+        dummy_model.parameters(), lr=0.1, momentum=0.9, weight_decay=1e-4)
 
 
 @pytest.fixture
@@ -271,6 +270,37 @@ def patch_training_dependencies(
         "log_artifact",
         lambda path: artifacts.append(path)
     )
+
+    # Mock data utility functions that can be slow
+    monkeypatch.setattr(
+        train_mod, "log_dataset_stats", lambda *args, **kw: None)
+    monkeypatch.setattr(
+        train_mod, "infer_num_node_features", lambda loader: 4)
+    monkeypatch.setattr(
+        train_mod, "infer_num_classes", lambda loader: 2)
+
+    def mock_evaluate(model, loader, device, cfg):
+        return {"accuracy": 0.85, "val_loss": 0.25, "macro_f1": 0.80}
+
+    monkeypatch.setattr(
+        "graph_transformer_benchmark.evaluation.evaluate",
+        mock_evaluate
+    )
+    monkeypatch.setattr(
+        "graph_transformer_benchmark.training."
+        "graph_transformer_trainer.evaluate",
+        mock_evaluate
+    )
+    pytorch_mock = MagicMock()
+    pytorch_mock.log_model = MagicMock()
+    monkeypatch.setattr(mlflow, "pytorch", pytorch_mock)
+    monkeypatch.setattr(mlflow, "log_param", lambda k, v: None)
+    monkeypatch.setattr(mlflow, "log_params", lambda d: None)
+    monkeypatch.setattr(mlflow, "set_tag", lambda k, v: None)
+    monkeypatch.setattr(mlflow, "set_tags", lambda d: None)
+    monkeypatch.setattr(mlflow, "end_run", lambda: None)
+    monkeypatch.setattr(mlflow, "active_run", lambda: MagicMock())
+
     return SimpleNamespace(metrics=metrics, artifacts=artifacts)
 
 
