@@ -88,12 +88,14 @@ def enrich_batch(batch: Batch, cfg: DictConfig) -> Batch:
         encoding.
     - edge_dist: A zero tensor for edge distance encoding.
     - hop_dist: A zero tensor for hop distance encoding.
+
     The function also sets the shape of the tensors based on the
     number of nodes in the batch.  The tensors are created with
     the same device and data type as the input batch.
-    Parameters
     """
-    num_nodes = batch.x.size(0)
+    num_nodes = batch.num_nodes
+    device = batch.edge_index.device
+    dtype = batch.x.dtype if batch.x is not None else torch.float32
 
     if getattr(cfg, "with_degree_enc", False):
         row, col = batch.edge_index
@@ -102,11 +104,13 @@ def enrich_batch(batch: Batch, cfg: DictConfig) -> Batch:
 
     if getattr(cfg, "with_eig_enc", False):
         dim = int(getattr(cfg, "num_eigenc", 0))
-        batch.eig_pos_emb = batch.x.new_empty((num_nodes, dim)).normal_()
+        batch.eig_pos_emb = torch.empty(
+            (num_nodes, dim), device=device, dtype=dtype).normal_()
 
     if getattr(cfg, "with_svd_enc", False):
         r = int(getattr(cfg, "num_svdenc", 0))
-        batch.svd_pos_emb = batch.x.new_empty((num_nodes, 2 * r)).normal_()
+        batch.svd_pos_emb = torch.empty(
+            (num_nodes, 2 * r), device=device, dtype=dtype).normal_()
 
     bias_shape = (num_nodes, num_nodes)
     if getattr(cfg, "with_spatial_bias", False):
