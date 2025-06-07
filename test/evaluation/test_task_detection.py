@@ -174,3 +174,18 @@ def test_is_multiclass_task_real_datasets(
     loader = DataLoader(dataset, batch_size=bs)
     result = is_multiclass_task(loader)
     assert result is expected_multiclass
+
+
+def test_detect_task_type_with_none_node_features(regression_none_x_loader):
+    """
+    Test that detect_task_type handles datasets with None node features.
+
+    This test reproduces the AttributeError that occurs when batch.x is None
+    in datasets like QM7b. The function should not crash when logging debug
+    information about node feature shapes.
+    """
+    # This should not raise AttributeError when batch.x is None
+    task_type = detect_task_type(regression_none_x_loader)
+
+    # Should detect as graph regression since QM7b-like data has float targets
+    assert task_type == TaskType.GRAPH_REGRESSION

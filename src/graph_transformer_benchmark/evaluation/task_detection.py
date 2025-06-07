@@ -38,10 +38,13 @@ def detect_task_type(loader: DataLoader) -> TaskType:
     is_regression = batch.y.dtype in (torch.float32, torch.float64)
     is_graph_level = _is_graph_level_task(batch)
 
+    # Safe logging - handle None node features (e.g., QM7b dataset)
+    x_shape = batch.x.shape if batch.x is not None else "None"
+
     logger.debug(
         "Task detection: regression=%s, graph_level=%s, "
         "y_shape=%s, x_shape=%s",
-        is_regression, is_graph_level, batch.y.shape, batch.x.shape
+        is_regression, is_graph_level, batch.y.shape, x_shape
     )
 
     if is_regression:
