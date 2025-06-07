@@ -59,6 +59,41 @@ def split_from_masks(data) -> dict[str, torch.Tensor]:
     }
 
 
+def ensure_node_features(batch: Batch, feature_dim: int = 1) -> Batch:
+    """
+    Ensure that the batch has node features, creating synthetic ones if needed.
+
+    Parameters
+    ----------
+    batch : Batch
+        The input batch that may have None node features.
+    feature_dim : int, default=1
+        The dimension of synthetic node features to create if x is None.
+
+    Returns
+    -------
+    Batch
+        The batch with guaranteed node features.
+
+    Notes
+    -----
+    This function handles datasets like QM7b where node features (batch.x)
+    are None. It creates a tensor of ones as synthetic node features to allow
+    GraphTransformer models to function properly. The synthetic features have
+    the same device and dtype as the edge_index.
+    """
+    if batch.x is None:
+        num_nodes = batch.num_nodes
+        device = batch.edge_index.device
+        # Create synthetic node features as ones
+        batch.x = torch.ones(
+            (num_nodes, feature_dim),
+            device=device,
+            dtype=torch.float32
+        )
+    return batch
+
+
 def enrich_batch(batch: Batch, cfg: DictConfig) -> Batch:
     """
     Enrich the batch with additional features based on the
@@ -92,10 +127,16 @@ def enrich_batch(batch: Batch, cfg: DictConfig) -> Batch:
     The function also sets the shape of the tensors based on the
     number of nodes in the batch.  The tensors are created with
     the same device and data type as the input batch.
+
+    If batch.x is None (e.g., QM7b dataset), synthetic node features
+    are created to ensure compatibility with GraphTransformer models.
     """
+    # Ensure node features exist for model compatibility
+    batch = ensure_node_features(batch, feature_dim=1)
+
     num_nodes = batch.num_nodes
     device = batch.edge_index.device
-    dtype = batch.x.dtype if batch.x is not None else torch.float32
+    dtype = batch.x.dtype
 
     if getattr(cfg, "with_degree_enc", False):
         row, col = batch.edge_index

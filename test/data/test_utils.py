@@ -101,3 +101,46 @@ def test_regression_none_x_enrichment_error(regression_none_x_loader):
     assert batch.y is not None, "Batch should have regression targets"
     cfg = OmegaConf.create({"with_degree_enc": True})
     utils.enrich_batch(batch, cfg)
+
+
+def test_ensure_node_features_with_none():
+    """Test ensure_node_features creates synthetic features when x is None."""
+    # Create a batch with None node features
+    edge_index = torch.tensor([[0, 1], [1, 0]], dtype=torch.long)
+    batch = Batch(edge_index=edge_index, x=None, batch=torch.tensor([0, 0]))
+
+    # Ensure node features are created
+    result = utils.ensure_node_features(batch, feature_dim=2)
+
+    assert result.x is not None
+    assert result.x.shape == (2, 2)  # 2 nodes, 2 features
+    assert torch.allclose(result.x, torch.ones_like(result.x))
+    assert result.x.device == edge_index.device
+    assert result.x.dtype == torch.float32
+
+
+def test_ensure_node_features_preserves_existing():
+    """Test ensure_node_features preserves existing node features."""
+    edge_index = torch.tensor([[0, 1], [1, 0]], dtype=torch.long)
+    x = torch.tensor([[1.0, 2.0], [3.0, 4.0]], dtype=torch.float32)
+    batch = Batch(edge_index=edge_index, x=x, batch=torch.tensor([0, 0]))
+
+    # Ensure existing features are preserved
+    result = utils.ensure_node_features(batch, feature_dim=3)
+
+    assert torch.equal(result.x, x)  # Should be unchanged
+
+
+def test_enrich_batch_creates_synthetic_features(regression_none_x_loader):
+    """Test that enrich_batch creates synthetic features for None x."""
+    batch = next(iter(regression_none_x_loader))
+    assert batch.x is None, "Test requires batch.x to be None"
+
+    cfg = OmegaConf.create({})
+    enriched = utils.enrich_batch(batch, cfg)
+
+    # Should now have synthetic node features
+    assert enriched.x is not None
+    assert enriched.x.shape[0] == enriched.num_nodes
+    assert enriched.x.shape[1] == 1  # Default feature_dim=1
+    assert torch.allclose(enriched.x, torch.ones_like(enriched.x))
