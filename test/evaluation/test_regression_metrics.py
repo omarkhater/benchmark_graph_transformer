@@ -8,7 +8,7 @@ root mean squared error (RMSE), mean absolute error (MAE), and R² score.
 
 import numpy as np
 
-from graph_transformer_benchmark.evaluation.regression_metrics import (
+from graph_transformer_benchmark.evaluation.metrics import (
     compute_regression_metrics,
 )
 

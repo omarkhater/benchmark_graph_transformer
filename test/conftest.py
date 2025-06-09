@@ -503,3 +503,75 @@ def ogb_node_dataset():
     mock_ds.__getitem__.return_value = data
     mock_ds.__len__.return_value = 1
     return mock_ds, data, train_idx, valid_idx, test_idx
+
+
+@pytest.fixture
+def binary_node_data() -> Data:
+    y = torch.tensor([0, 1, 0, 1]).unsqueeze(1)          # (N, 1)
+    x = torch.randn(4, 3)
+    edge = torch.tensor([[0, 1, 2, 3], [1, 2, 3, 0]])
+    return Data(x=x, y=y, edge_index=edge)
+
+
+@pytest.fixture
+def multiclass_node_data() -> Data:
+    y = torch.tensor([0, 2, 1, 2])                       # (N,)
+    x = torch.randn(4, 3)
+    edge = torch.tensor([[0, 1, 2, 3], [1, 2, 3, 0]])
+    return Data(x=x, y=y, edge_index=edge)
+
+
+@pytest.fixture
+def binary_graph_dataset() -> list[Data]:
+    return [
+        Data(x=torch.randn(1, 3), y=torch.tensor(0)),
+        Data(x=torch.randn(2, 3), y=torch.tensor(1)),
+        Data(x=torch.randn(1, 3), y=torch.tensor(0)),
+        Data(x=torch.randn(3, 3), y=torch.tensor(1)),
+    ]
+
+
+@pytest.fixture
+def multiclass_graph_dataset() -> list[Data]:
+    lbls = [0, 1, 2, 1]
+    return [
+        Data(x=torch.randn(i + 1, 3),
+             y=torch.tensor(l)) for i, l in enumerate(lbls)]
+
+
+@pytest.fixture
+def node_reg_single_target() -> Data:
+    return Data(
+        x=torch.randn(4, 3),
+        y=torch.randn(4),                                 # (N,)
+        edge_index=torch.tensor([[0, 1, 2, 3], [1, 2, 3, 0]])
+    )
+
+
+@pytest.fixture
+def node_reg_multi_target() -> Data:
+    return Data(
+        x=torch.randn(4, 3),
+        y=torch.randn(4, 3),                              # (N, 3)
+        edge_index=torch.tensor([[0, 1, 2, 3], [1, 2, 3, 0]])
+    )
+
+
+@pytest.fixture
+def graph_reg_single_target() -> list[Data]:
+    return [
+        Data(x=torch.randn(2, 3), y=torch.randn(1)),
+        Data(x=torch.randn(1, 3), y=torch.randn(1)),
+        Data(x=torch.randn(3, 3), y=torch.randn(1)),
+        Data(x=torch.randn(4, 3), y=torch.randn(1)),
+    ]
+
+
+@pytest.fixture
+def graph_reg_multi_target() -> list[Data]:
+    return [
+        Data(x=torch.randn(2, 3), y=torch.randn(3)),
+        Data(x=torch.randn(1, 3), y=torch.randn(3)),
+        Data(x=torch.randn(3, 3), y=torch.randn(3)),
+        Data(x=torch.randn(4, 3), y=torch.randn(3)),
+    ]
