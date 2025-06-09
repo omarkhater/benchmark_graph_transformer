@@ -150,12 +150,28 @@ def test_node_regression(request, data_fixture):
 
 
 @pytest.mark.parametrize(
-    "dataset_fixture", ["graph_reg_single_target", "graph_reg_multi_target"]
+    "dataset_fixture", [
+        "graph_reg_single_target",
+        "graph_reg_multi_target",
+        "regression_none_x_loader"  # Add QM7b-like dataset test
+    ]
 )
 def test_graph_regression(request, dataset_fixture):
-    """Test graph-level regression for single and multi-target outputs."""
-    dataset = request.getfixturevalue(dataset_fixture)
-    loader = DataLoader(dataset, batch_size=2)
+    """
+    Test graph-level regression for various outputs:
+    - Single target graphs
+    - Multi-target graphs
+    - QM7b-like graphs (x=None)
+    """
+    data = request.getfixturevalue(dataset_fixture)
+
+    # Convert fixture data into a DataLoader
+    if isinstance(data, DataLoader):
+        loader = data  # Already a DataLoader (regression_none_x_loader)
+    elif isinstance(data, list):
+        loader = DataLoader(data, batch_size=2)  # List of graphs
+    else:
+        loader = DataLoader([data], batch_size=2)  # Single graph
 
     labels, preds = collect_predictions(
         DummyRegressor(), loader, torch.device("cpu"))
