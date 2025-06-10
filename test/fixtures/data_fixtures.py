@@ -65,8 +65,7 @@ def create_node_features(
 def create_targets(
     num_nodes: int,
     num_targets: int,
-    task_type: str,
-    is_binary: bool = True
+    task_type: str
 ) -> torch.Tensor:
     """Creates target values for nodes.
 
@@ -74,14 +73,16 @@ def create_targets(
         num_nodes: Number of nodes
         num_targets: Number of target classes/dimensions
         task_type: Either 'classification' or 'regression'
-        is_binary: For classification, whether binary or multiclass
 
     Returns:
         torch.Tensor: Target values
     """
     if task_type == 'classification':
-        if is_binary:
+        if num_targets == 1:
+            # Binary classification: return labels in {0, 1}
+            # with shape (num_nodes, 1)
             return torch.randint(0, 2, (num_nodes, 1))
+        # Multiclass classification: return class indices
         return torch.randint(0, num_targets, (num_nodes,))
 
     if num_targets == 1:
@@ -190,7 +191,6 @@ def make_node_data():
         in_features: Number of input features per node
         num_targets: Number of target classes/dimensions
         task_type: Either 'classification' or 'regression'
-        is_binary: For classification, whether binary or multiclass
         edge_attr_dim: Optional dimension for edge attributes
         sparse: If True, use sparse node features as indices
 
@@ -202,7 +202,6 @@ def make_node_data():
         in_features: int = 3,
         num_targets: int = 2,
         task_type: str = 'classification',
-        is_binary: bool = True,
         edge_attr_dim: int | None = None,
         sparse: bool = False
     ) -> Data:
@@ -214,7 +213,7 @@ def make_node_data():
 
         # Create features and targets
         x = create_node_features(num_nodes, in_features, sparse)
-        y = create_targets(num_nodes, num_targets, task_type, is_binary)
+        y = create_targets(num_nodes, num_targets, task_type)
 
         # Create edges - circular graph
         edge_index = torch.stack([
@@ -241,7 +240,6 @@ def make_graph_dataset():
         in_features: Number of input features per node
         num_targets: Number of target classes/dimensions
         task_type: Either 'classification' or 'regression'
-        is_binary: For classification, whether binary or multiclass
         edge_attr_dim: Optional dimension for edge attributes
         sparse: If True, use sparse node features as indices
         min_nodes: Minimum nodes per graph
@@ -255,7 +253,6 @@ def make_graph_dataset():
         in_features: int,
         task_type: str,
         num_targets: int,
-        is_binary: bool,
         edge_attr_dim: int | None,
         sparse: bool
     ) -> Data:
@@ -268,7 +265,7 @@ def make_graph_dataset():
 
         # Graph-level targets
         if task_type == 'classification':
-            y = torch.randint(0, 2 if is_binary else num_targets, (1,))
+            y = torch.randint(0, 2 if num_targets == 1 else num_targets, (1,))
         else:
             y = torch.randn(1 if num_targets == 1 else num_targets)
 
@@ -283,7 +280,6 @@ def make_graph_dataset():
         in_features: int = 3,
         num_targets: int = 2,
         task_type: str = 'classification',
-        is_binary: bool = True,
         edge_attr_dim: int | None = None,
         sparse: bool = False,
         min_nodes: int = 1,
@@ -297,7 +293,7 @@ def make_graph_dataset():
         return [
             _create_graph(
                 torch.randint(min_nodes, max_nodes + 1, (1,)).item(),
-                in_features, task_type, num_targets, is_binary,
+                in_features, task_type, num_targets,
                 edge_attr_dim, sparse
             )
             for _ in range(num_graphs)
@@ -311,9 +307,8 @@ def binary_node_data(make_node_data) -> Data:
     return make_node_data(
         num_nodes=4,
         in_features=3,
-        num_targets=2,
-        task_type='classification',
-        is_binary=True
+        num_targets=1,
+        task_type='classification'
     )
 
 
@@ -324,8 +319,7 @@ def multiclass_node_data(make_node_data) -> Data:
         num_nodes=4,
         in_features=3,
         num_targets=3,
-        task_type='classification',
-        is_binary=False
+        task_type='classification'
     )
 
 
@@ -357,9 +351,8 @@ def binary_graph_dataset(make_graph_dataset) -> list[Data]:
     return make_graph_dataset(
         num_graphs=4,
         in_features=3,
-        num_targets=2,
+        num_targets=1,
         task_type='classification',
-        is_binary=True,
         min_nodes=1,
         max_nodes=3
     )
@@ -373,7 +366,6 @@ def multiclass_graph_dataset(make_graph_dataset) -> list[Data]:
         in_features=3,
         num_targets=3,
         task_type='classification',
-        is_binary=False,
         min_nodes=1,
         max_nodes=4
     )
@@ -470,7 +462,6 @@ def cora_style_loader() -> DataLoader:
         in_features=1433,
         num_targets=7,
         task_type='classification',
-        is_binary=False,
         sparse=True  # Use sparse features like Cora
     )
     train_mask, val_mask, test_mask = create_train_val_test_masks(
@@ -550,7 +541,6 @@ class DataManager:
             Data for node tasks, list[Data] for graph tasks
         """
         classification = not cfg.is_regression
-        is_binary = classification and cfg.num_targets == 1
         task_str = "classification" if classification else "regression"
 
         if cfg.task_type == "node":
@@ -559,7 +549,6 @@ class DataManager:
                 in_features=cfg.num_features,
                 num_targets=cfg.num_targets,
                 task_type=task_str,
-                is_binary=is_binary,
                 edge_attr_dim=cfg.edge_attr_dim,
                 sparse=cfg.sparse
             )
@@ -569,7 +558,6 @@ class DataManager:
             in_features=cfg.num_features,
             num_targets=cfg.num_targets,
             task_type=task_str,
-            is_binary=is_binary,
             edge_attr_dim=cfg.edge_attr_dim,
             sparse=cfg.sparse
         )
