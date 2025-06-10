@@ -505,73 +505,209 @@ def ogb_node_dataset():
     return mock_ds, data, train_idx, valid_idx, test_idx
 
 
-@pytest.fixture
-def binary_node_data() -> Data:
-    y = torch.tensor([0, 1, 0, 1]).unsqueeze(1)          # (N, 1)
-    x = torch.randn(4, 3)
-    edge = torch.tensor([[0, 1, 2, 3], [1, 2, 3, 0]])
-    return Data(x=x, y=y, edge_index=edge)
-
+# ----------------------------------------------------------------------
+# Data Generation Factory Fixtures
+# ----------------------------------------------------------------------
 
 @pytest.fixture
-def multiclass_node_data() -> Data:
-    y = torch.tensor([0, 2, 1, 2])                       # (N,)
-    x = torch.randn(4, 3)
-    edge = torch.tensor([[0, 1, 2, 3], [1, 2, 3, 0]])
-    return Data(x=x, y=y, edge_index=edge)
+def make_node_data():
+    """Factory fixture for creating node-level task data.
+
+    Args:
+        num_nodes: Number of nodes in the graph
+        in_features: Number of input features per node
+        num_targets: For classification = number of classes
+                    For regression = number of target dimensions
+        task_type: Either 'binary', 'multiclass', or 'regression'
+    """
+    def _make_data(
+        num_nodes: int = 4,
+        in_features: int = 3,
+        num_targets: int = 2,
+        task_type: str = 'classification',
+        is_binary: bool = True
+    ) -> Data:
+
+        SUPPORTED_TASKS = ['classification', 'regression']
+        if task_type not in SUPPORTED_TASKS:
+            raise ValueError(
+                f"Task type must be one of {SUPPORTED_TASKS}, got {task_type}"
+            )
+        x = torch.randn(num_nodes, in_features)
+        edge_index = torch.stack([
+            torch.arange(num_nodes),
+            torch.roll(torch.arange(num_nodes), -1)
+        ])
+        if task_type == 'classification':
+            if is_binary:
+                y = torch.randint(0, 2, (num_nodes, 1))
+            else:
+                y = torch.randint(0, num_targets, (num_nodes,))
+        elif task_type == 'regression':
+            if num_targets == 1:
+                y = torch.randn(num_nodes)
+            else:
+                y = torch.randn(num_nodes, num_targets)
+
+        return Data(x=x, y=y, edge_index=edge_index)
+
+    return _make_data
 
 
 @pytest.fixture
-def binary_graph_dataset() -> list[Data]:
-    return [
-        Data(x=torch.randn(1, 3), y=torch.tensor(0)),
-        Data(x=torch.randn(2, 3), y=torch.tensor(1)),
-        Data(x=torch.randn(1, 3), y=torch.tensor(0)),
-        Data(x=torch.randn(3, 3), y=torch.tensor(1)),
-    ]
+def make_graph_dataset():
+    """Factory fixture for creating graph-level task datasets.
+
+    Args:
+        num_graphs: Number of graphs in dataset
+        in_features: Number of input features per node
+        num_targets: For classification = number of classes
+                    For regression = number of target dimensions
+        task_type: Either 'classification' or 'regression'
+        is_binary: If True & task_type='classification', creates binary targets
+        min_nodes: Minimum nodes per graph
+        max_nodes: Maximum nodes per graph
+    """
+    def _create_graph(
+            num_nodes: int,
+            in_features: int,
+            task_type: str,
+            num_targets: int,
+            is_binary: bool
+            ) -> Data:
+        """Create a single graph with specified properties."""
+        x = torch.randn(num_nodes, in_features)
+        edge_index = torch.stack([
+            torch.arange(num_nodes),
+            torch.roll(torch.arange(num_nodes), -1)
+        ])
+        if task_type == 'classification':
+            y = torch.randint(0, 2 if is_binary else num_targets, (1,))
+        else:
+            y = torch.randn(1 if num_targets == 1 else num_targets)
+        return Data(x=x, y=y, edge_index=edge_index)
+
+    def _make_dataset(
+        num_graphs: int = 4,
+        in_features: int = 3,
+        num_targets: int = 2,
+        task_type: str = 'classification',
+        is_binary: bool = True,
+        min_nodes: int = 1,
+        max_nodes: int = 4
+    ) -> list[Data]:
+        """Create a dataset of graphs with specified properties."""
+        if task_type not in ['classification', 'regression']:
+            raise ValueError(
+                "Task type must be 'classification' or 'regression'"
+            )
+
+        return [
+            _create_graph(
+                torch.randint(min_nodes, max_nodes + 1, (1,)).item(),
+                in_features, task_type, num_targets, is_binary
+            )
+            for _ in range(num_graphs)
+        ]
+
+    return _make_dataset
 
 
 @pytest.fixture
-def multiclass_graph_dataset() -> list[Data]:
-    lbls = [0, 1, 2, 1]
-    return [
-        Data(x=torch.randn(i + 1, 3),
-             y=torch.tensor(l)) for i, l in enumerate(lbls)]
-
-
-@pytest.fixture
-def node_reg_single_target() -> Data:
-    return Data(
-        x=torch.randn(4, 3),
-        y=torch.randn(4),                                 # (N,)
-        edge_index=torch.tensor([[0, 1, 2, 3], [1, 2, 3, 0]])
+def binary_node_data(make_node_data) -> Data:
+    """Node-level binary classification with 4 nodes, 3 features"""
+    return make_node_data(
+        num_nodes=4,
+        in_features=3,
+        num_targets=2,
+        task_type='classification',
+        is_binary=True
     )
 
 
 @pytest.fixture
-def node_reg_multi_target() -> Data:
-    return Data(
-        x=torch.randn(4, 3),
-        y=torch.randn(4, 3),                              # (N, 3)
-        edge_index=torch.tensor([[0, 1, 2, 3], [1, 2, 3, 0]])
+def multiclass_node_data(make_node_data) -> Data:
+    """Node-level 3-class classification with 4 nodes, 3 features"""
+    return make_node_data(
+        num_nodes=4,
+        in_features=3,
+        num_targets=3,
+        task_type='classification',
+        is_binary=False
     )
 
 
 @pytest.fixture
-def graph_reg_single_target() -> list[Data]:
-    return [
-        Data(x=torch.randn(2, 3), y=torch.randn(1)),
-        Data(x=torch.randn(1, 3), y=torch.randn(1)),
-        Data(x=torch.randn(3, 3), y=torch.randn(1)),
-        Data(x=torch.randn(4, 3), y=torch.randn(1)),
-    ]
+def node_reg_single_target(make_node_data) -> Data:
+    """Node-level single target regression with 4 nodes, 3 features"""
+    return make_node_data(
+        num_nodes=4,
+        in_features=3,
+        num_targets=1,
+        task_type='regression'
+    )
 
 
 @pytest.fixture
-def graph_reg_multi_target() -> list[Data]:
-    return [
-        Data(x=torch.randn(2, 3), y=torch.randn(3)),
-        Data(x=torch.randn(1, 3), y=torch.randn(3)),
-        Data(x=torch.randn(3, 3), y=torch.randn(3)),
-        Data(x=torch.randn(4, 3), y=torch.randn(3)),
-    ]
+def node_reg_multi_target(make_node_data) -> Data:
+    """Node-level multi-target regression with 4 nodes, 3 features"""
+    return make_node_data(
+        num_nodes=4,
+        in_features=3,
+        num_targets=3,
+        task_type='regression'
+    )
+
+
+@pytest.fixture
+def binary_graph_dataset(make_graph_dataset) -> list[Data]:
+    """Graph-level binary classification with varied nodes, 3 features"""
+    return make_graph_dataset(
+        num_graphs=4,
+        in_features=3,
+        num_targets=2,
+        task_type='classification',
+        is_binary=True,
+        min_nodes=1,
+        max_nodes=3
+    )
+
+
+@pytest.fixture
+def multiclass_graph_dataset(make_graph_dataset) -> list[Data]:
+    """Graph-level 3-class classification with varied nodes, 3 features"""
+    return make_graph_dataset(
+        num_graphs=4,
+        in_features=3,
+        num_targets=3,
+        task_type='classification',
+        is_binary=False,
+        min_nodes=1,
+        max_nodes=4
+    )
+
+
+@pytest.fixture
+def graph_reg_single_target(make_graph_dataset) -> list[Data]:
+    """Graph-level single-target regression with varied nodes, 3 features"""
+    return make_graph_dataset(
+        num_graphs=4,
+        in_features=3,
+        num_targets=1,
+        task_type='regression',
+        min_nodes=1,
+        max_nodes=4
+    )
+
+
+@pytest.fixture
+def graph_reg_multi_target(make_graph_dataset) -> list[Data]:
+    """Graph-level multi-target regression with varied nodes, 3 features"""
+    return make_graph_dataset(
+        num_graphs=4,
+        in_features=3,
+        num_targets=3,
+        task_type='regression',
+        min_nodes=1,
+        max_nodes=4
+    )
