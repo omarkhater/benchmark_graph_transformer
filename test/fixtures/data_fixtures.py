@@ -2,8 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum, auto
-from typing import Callable
+from typing import Callable, Literal
 
 import pytest
 import torch
@@ -483,47 +482,24 @@ def cora_style_loader() -> DataLoader:
     return DataLoader([data], batch_size=1)
 
 
-class TaskType(Enum):
-    """Enum for different task types."""
-    NODE = auto()
-    GRAPH = auto()
-
-
-class TargetType(Enum):
-    """Enum for different target types."""
-    BINARY = auto()
-    MULTICLASS = auto()
-    REGRESSION = auto()
-
-    def to_task_type(self) -> str:
-        """Convert TargetType enum to task type string.
-
-        Returns:
-            str: Either 'regression' or 'classification'
-        """
-        if self == TargetType.REGRESSION:
-            return 'regression'
-        return 'classification'
-
-
 @dataclass
 class DataConfig:
     """Configuration for synthetic data generation.
 
     Args:
-        task_type: Whether node-level or graph-level task
-        target_type: Type of target (binary, multiclass, regression)
+        task_type: Either "node" or "graph"
+        is_regression: If True, regression task, otherwise classification
+        num_targets: Number of target classes or dimensions
         num_features: Number of input features per node
-        num_targets: Number of target classes or regression dimensions
         sparse: Whether to use sparse node features
         edge_attr_dim: Optional dimension for edge attributes
         num_nodes: Number of nodes (node tasks) or max nodes (for graph tasks)
         num_graphs: Number of graphs to generate (for graph tasks)
     """
-    task_type: TaskType
-    target_type: TargetType
+    task_type: Literal["node", "graph"]
+    is_regression: bool
+    num_targets: int = 1
     num_features: int = 3
-    num_targets: int = 2
     sparse: bool = False
     edge_attr_dim: int | None = None
     num_nodes: int = 4
@@ -544,15 +520,15 @@ class DataManager:
         ```python
         def test_model_handles_all_cases(data_manager):
             # Test node binary classification
-            node_data = data_manager.get_data(
-                TaskType.NODE, TargetType.BINARY
+            cfg = DataConfig(
+                task_type="node", is_regression=False, num_targets=1
             )
+            node_data = data_manager.get_data(cfg)
             assert model(node_data).shape == expected_shape
 
             # Test graph regression
-            graph_data = data_manager.get_data(
-                TaskType.GRAPH, TargetType.REGRESSION
-            )
+            cfg = DataConfig(task_type="graph", is_regression=True)
+            graph_data = data_manager.get_data(cfg)
             assert model(graph_data).shape == expected_shape
         ```
     """
@@ -564,91 +540,76 @@ class DataManager:
         self._make_node = make_node_data
         self._make_graph = make_graph_dataset
 
-    def get_data(
-        self,
-        task_type: TaskType,
-        target_type: TargetType,
-        **kwargs
-    ) -> Data | list[Data]:
+    def get_data(self, cfg: DataConfig) -> Data | list[Data]:
         """Get data for specific task and target type.
 
         Args:
-            task_type: NODE or GRAPH task
-            target_type: BINARY, MULTICLASS, or REGRESSION
-            **kwargs: Additional args passed to data factories
+            cfg: DataConfig specifying the data requirements
 
         Returns:
             Data for node tasks, list[Data] for graph tasks
         """
-        config = DataConfig(
-            task_type=task_type,
-            target_type=target_type,
-            **kwargs
-        )
+        classification = not cfg.is_regression
+        is_binary = classification and cfg.num_targets == 1
+        task_str = "classification" if classification else "regression"
 
-        if task_type == TaskType.NODE:
+        if cfg.task_type == "node":
             return self._make_node(
-                num_nodes=config.num_nodes,
-                in_features=config.num_features,
-                num_targets=config.num_targets,
-                task_type=target_type.to_task_type(),
-                is_binary=target_type == TargetType.BINARY,
-                edge_attr_dim=config.edge_attr_dim,
-                sparse=config.sparse
+                num_nodes=cfg.num_nodes,
+                in_features=cfg.num_features,
+                num_targets=cfg.num_targets,
+                task_type=task_str,
+                is_binary=is_binary,
+                edge_attr_dim=cfg.edge_attr_dim,
+                sparse=cfg.sparse
             )
 
         return self._make_graph(
-            num_graphs=config.num_graphs,
-            in_features=config.num_features,
-            num_targets=config.num_targets,
-            task_type=target_type.to_task_type(),
-            is_binary=target_type == TargetType.BINARY,
-            edge_attr_dim=config.edge_attr_dim,
-            sparse=config.sparse
+            num_graphs=cfg.num_graphs,
+            in_features=cfg.num_features,
+            num_targets=cfg.num_targets,
+            task_type=task_str,
+            is_binary=is_binary,
+            edge_attr_dim=cfg.edge_attr_dim,
+            sparse=cfg.sparse
         )
 
-    def get_loader(
-        self,
-        task_type: TaskType,
-        target_type: TargetType,
-        batch_size: int = 2,
-        **kwargs
-    ) -> DataLoader:
+    def get_loader(self, cfg: DataConfig, batch_size: int = 2) -> DataLoader:
         """Get DataLoader for specific task and target type.
 
         Args:
-            task_type: NODE or GRAPH task
-            target_type: BINARY, MULTICLASS, or REGRESSION
+            cfg: DataConfig specifying the data requirements
             batch_size: Batch size for the loader
-            **kwargs: Additional args passed to data factories
 
         Returns:
             DataLoader containing the requested data
         """
-        data = self.get_data(task_type, target_type, **kwargs)
+        data = self.get_data(cfg)
         if isinstance(data, list):
             return DataLoader(data, batch_size=batch_size)
         return DataLoader([data], batch_size=1)
 
     def get_masked_loader(
         self,
-        target_type: TargetType,
+        cfg: DataConfig,
         train_ratio: float = 0.6,
-        val_ratio: float = 0.2,
-        **kwargs
+        val_ratio: float = 0.2
     ) -> DataLoader:
         """Get loader with train/val/test node masks.
 
         Args:
-            target_type: BINARY, MULTICLASS, or REGRESSION
+            cfg: DataConfig specifying the data requirements
+                (must be node task)
             train_ratio: Fraction of nodes for training
             val_ratio: Fraction of nodes for validation
-            **kwargs: Additional args passed to data factory
 
         Returns:
             DataLoader with masked node data
         """
-        data = self.get_data(TaskType.NODE, target_type, **kwargs)
+        if cfg.task_type != "node":
+            raise ValueError("get_masked_loader only supports node tasks")
+
+        data = self.get_data(cfg)
         train_mask, val_mask, test_mask = create_train_val_test_masks(
             data.num_nodes, train_ratio, val_ratio
         )
