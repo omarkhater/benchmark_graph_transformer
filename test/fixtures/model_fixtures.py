@@ -1,0 +1,124 @@
+"""Model fixtures."""
+import pytest
+import torch
+from torch import Tensor
+from torch.nn import Module, Parameter
+from torch_geometric.data import Data
+from torch_geometric.loader import DataLoader
+
+
+class DummyModel(Module):
+    """Model that returns perfect one‐hot logits based on batch.y,
+    scaled by a learnable weight."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.scale = Parameter(torch.tensor(1.0))
+
+    def forward(self, batch) -> Tensor:
+        labels = batch.y.view(-1)
+        num_classes = int(labels.max().item()) + 1
+        logits = torch.zeros(
+            (labels.size(0), num_classes), device=labels.device
+        )
+        logits[
+            torch.arange(labels.size(0), device=labels.device), labels
+        ] = 1.0
+        return logits * self.scale
+
+
+@pytest.fixture
+def dummy_model() -> DummyModel:
+    """Provide a DummyModel instance for testing."""
+    return DummyModel()
+
+
+@pytest.fixture(autouse=True)
+def ensure_model_has_parameter(dummy_model: DummyModel) -> None:
+    """Ensure DummyModel has at least one parameter for optimizer tests."""
+    if not any(True for _ in dummy_model.parameters()):
+        dummy_model.register_parameter(
+            "dummy_param", Parameter(torch.zeros(1))
+        )
+
+
+@pytest.fixture
+def graph_loader() -> DataLoader:
+    """Provide a DataLoader for two graph‐level samples with float targets."""
+    d0 = Data(x=torch.randn(1, 4), y=torch.tensor([0.5], dtype=torch.float32))
+    d1 = Data(x=torch.randn(1, 4), y=torch.tensor([1.5], dtype=torch.float32))
+    return DataLoader([d0, d1], batch_size=2)
+
+
+@pytest.fixture
+def node_loader() -> DataLoader:
+    """Provide a DataLoader for a single graph with 4 nodes [0,1,0,1]."""
+
+    labels = torch.tensor([0, 1, 0, 1]).unsqueeze(1)
+    edge_index = torch.tensor(
+        [
+            [0, 1, 2, 3],   # "chain" or self‑loops, etc.
+            [1, 2, 3, 0]
+        ],  # here we connect 0→1,1→2,2→3,3→0
+        dtype=torch.long)
+    graph = Data(
+        x=torch.randn(4, 4),
+        y=labels,
+        edge_index=edge_index
+        )
+    return DataLoader([graph], batch_size=1)
+
+
+@pytest.fixture
+def generic_loader() -> DataLoader:
+    """Provide DataLoader for generic graph classification with 1D targets."""
+    # two singleton graphs, each with a self‑loop edge:
+    g0 = Data(
+        x=torch.randn(1, 4),
+        y=torch.tensor(0),
+        edge_index=torch.tensor([[0], [0]], dtype=torch.long),
+    )
+    g1 = Data(
+        x=torch.randn(1, 4),
+        y=torch.tensor(1),
+        edge_index=torch.tensor([[0], [0]], dtype=torch.long),
+    )
+    return DataLoader([g0, g1], batch_size=2)
+
+
+@pytest.fixture
+def regression_loader() -> DataLoader:
+    """Provide DataLoader for regression task with float targets."""
+    # Create a small graph with float node labels
+    graph = Data(
+        x=torch.randn(4, 4),
+        y=torch.randn(4),  # float targets for regression
+        edge_index=torch.tensor(
+            [[0, 1, 2, 3], [1, 2, 3, 0]],
+            dtype=torch.long
+        )
+    )
+    return DataLoader([graph], batch_size=1)
+
+
+@pytest.fixture
+def regression_none_x_loader() -> DataLoader:
+    """Provide DataLoader for regression datasets with None node features.
+
+    This fixture reproduces the structure found in some regression datasets
+    where batch.x is None but edge_index and regression targets exist.
+    This is needed to test edge cases in data enrichment functions.
+    """
+    # Create graph with None node features (like QM7b dataset)
+    graph = Data(
+        x=None,  # This is the key condition that causes issues
+        edge_index=torch.tensor([[0, 1], [1, 0]], dtype=torch.long),
+        y=torch.tensor([42.5])  # float regression target
+    )
+    return DataLoader([graph], batch_size=1)
+
+
+@pytest.fixture
+def device() -> torch.device:
+    """Provide a CPU device for testing."""
+    return torch.device("cpu")
