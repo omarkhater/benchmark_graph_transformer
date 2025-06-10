@@ -15,13 +15,17 @@ from .fixtures.config_fixtures import (
 from .fixtures.data_fixtures import (
     binary_graph_dataset,
     binary_node_data,
+    cora_style_loader,
+    data_manager,
     generic_loader,
     graph_batch,
     graph_loader,
     graph_reg_multi_target,
     graph_reg_single_target,
+    graph_regression_suite,
     make_graph_dataset,
     make_node_data,
+    masked_node_loader,
     multiclass_graph_dataset,
     multiclass_node_data,
     node_loader,
@@ -73,6 +77,10 @@ __all__ = [
     'multiclass_graph_dataset',
     'graph_reg_single_target',
     'graph_reg_multi_target',
+    'data_manager',
+    'graph_regression_suite',
+    'masked_node_loader',
+    'cora_style_loader',
 
     # Dataset fixtures
     'cleanup_all',

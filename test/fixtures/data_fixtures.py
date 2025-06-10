@@ -1,6 +1,10 @@
 """create synthetic data for testing specific functionalities."""
 from __future__ import annotations
 
+from dataclasses import dataclass
+from enum import Enum, auto
+from typing import Callable
+
 import pytest
 import torch
 from torch_geometric.data import Batch, Data
@@ -477,3 +481,255 @@ def cora_style_loader() -> DataLoader:
     data.val_mask = val_mask
     data.test_mask = test_mask
     return DataLoader([data], batch_size=1)
+
+
+class TaskType(Enum):
+    """Enum for different task types."""
+    NODE = auto()
+    GRAPH = auto()
+
+
+class TargetType(Enum):
+    """Enum for different target types."""
+    BINARY = auto()
+    MULTICLASS = auto()
+    REGRESSION = auto()
+
+    def to_task_type(self) -> str:
+        """Convert TargetType enum to task type string.
+
+        Returns:
+            str: Either 'regression' or 'classification'
+        """
+        if self == TargetType.REGRESSION:
+            return 'regression'
+        return 'classification'
+
+
+@dataclass
+class DataConfig:
+    """Configuration for synthetic data generation.
+
+    Args:
+        task_type: Whether node-level or graph-level task
+        target_type: Type of target (binary, multiclass, regression)
+        num_features: Number of input features per node
+        num_targets: Number of target classes or regression dimensions
+        sparse: Whether to use sparse node features
+        edge_attr_dim: Optional dimension for edge attributes
+        num_nodes: Number of nodes (node tasks) or max nodes (for graph tasks)
+        num_graphs: Number of graphs to generate (for graph tasks)
+    """
+    task_type: TaskType
+    target_type: TargetType
+    num_features: int = 3
+    num_targets: int = 2
+    sparse: bool = False
+    edge_attr_dim: int | None = None
+    num_nodes: int = 4
+    num_graphs: int = 4
+
+
+class DataManager:
+    """Manager class providing unified access to all data fixtures.
+
+    This class simplifies test data generation by providing:
+    1. Consistent interface for both node and graph tasks
+    2. Support for all target types (binary/multiclass/regression)
+    3. Optional edge attributes and sparse features
+    4. Both individual graphs and batched data
+    5. Train/val/test splits for node tasks
+
+    Example:
+        ```python
+        def test_model_handles_all_cases(data_manager):
+            # Test node binary classification
+            node_data = data_manager.get_data(
+                TaskType.NODE, TargetType.BINARY
+            )
+            assert model(node_data).shape == expected_shape
+
+            # Test graph regression
+            graph_data = data_manager.get_data(
+                TaskType.GRAPH, TargetType.REGRESSION
+            )
+            assert model(graph_data).shape == expected_shape
+        ```
+    """
+    def __init__(
+        self,
+        make_node_data: Callable,
+        make_graph_dataset: Callable
+    ) -> None:
+        self._make_node = make_node_data
+        self._make_graph = make_graph_dataset
+
+    def get_data(
+        self,
+        task_type: TaskType,
+        target_type: TargetType,
+        **kwargs
+    ) -> Data | list[Data]:
+        """Get data for specific task and target type.
+
+        Args:
+            task_type: NODE or GRAPH task
+            target_type: BINARY, MULTICLASS, or REGRESSION
+            **kwargs: Additional args passed to data factories
+
+        Returns:
+            Data for node tasks, list[Data] for graph tasks
+        """
+        config = DataConfig(
+            task_type=task_type,
+            target_type=target_type,
+            **kwargs
+        )
+
+        if task_type == TaskType.NODE:
+            return self._make_node(
+                num_nodes=config.num_nodes,
+                in_features=config.num_features,
+                num_targets=config.num_targets,
+                task_type=target_type.to_task_type(),
+                is_binary=target_type == TargetType.BINARY,
+                edge_attr_dim=config.edge_attr_dim,
+                sparse=config.sparse
+            )
+
+        return self._make_graph(
+            num_graphs=config.num_graphs,
+            in_features=config.num_features,
+            num_targets=config.num_targets,
+            task_type=target_type.to_task_type(),
+            is_binary=target_type == TargetType.BINARY,
+            edge_attr_dim=config.edge_attr_dim,
+            sparse=config.sparse
+        )
+
+    def get_loader(
+        self,
+        task_type: TaskType,
+        target_type: TargetType,
+        batch_size: int = 2,
+        **kwargs
+    ) -> DataLoader:
+        """Get DataLoader for specific task and target type.
+
+        Args:
+            task_type: NODE or GRAPH task
+            target_type: BINARY, MULTICLASS, or REGRESSION
+            batch_size: Batch size for the loader
+            **kwargs: Additional args passed to data factories
+
+        Returns:
+            DataLoader containing the requested data
+        """
+        data = self.get_data(task_type, target_type, **kwargs)
+        if isinstance(data, list):
+            return DataLoader(data, batch_size=batch_size)
+        return DataLoader([data], batch_size=1)
+
+    def get_masked_loader(
+        self,
+        target_type: TargetType,
+        train_ratio: float = 0.6,
+        val_ratio: float = 0.2,
+        **kwargs
+    ) -> DataLoader:
+        """Get loader with train/val/test node masks.
+
+        Args:
+            target_type: BINARY, MULTICLASS, or REGRESSION
+            train_ratio: Fraction of nodes for training
+            val_ratio: Fraction of nodes for validation
+            **kwargs: Additional args passed to data factory
+
+        Returns:
+            DataLoader with masked node data
+        """
+        data = self.get_data(TaskType.NODE, target_type, **kwargs)
+        train_mask, val_mask, test_mask = create_train_val_test_masks(
+            data.num_nodes, train_ratio, val_ratio
+        )
+        data.train_mask = train_mask
+        data.val_mask = val_mask
+        data.test_mask = test_mask
+        return DataLoader([data], batch_size=1)
+
+
+@pytest.fixture
+def data_manager(make_node_data, make_graph_dataset) -> DataManager:
+    """Provides DataManager instance for unified data access."""
+    return DataManager(make_node_data, make_graph_dataset)
+
+
+@pytest.fixture
+def graph_regression_suite(request) -> dict[str, DataLoader]:
+    """Provides a suite of graph regression test cases.
+
+    Returns a dictionary containing different DataLoader configurations for
+    graph regression tasks:
+        - single_target: One regression target per graph
+        - multi_target: Multiple regression targets per graph (e.g. QM9)
+        - varied_graphs: Graphs with different numbers of nodes
+        - no_features: Graphs without node features (e.g. QM7b)
+        - edge_attr: Graphs with edge attributes (e.g. distance matrices)
+
+    This comprehensive suite helps test model behavior across different
+    graph regression scenarios found in real-world datasets.
+
+    Returns:
+        dict[str, DataLoader]: Named test cases mapping to DataLoaders
+    """
+    make_dataset = request.getfixturevalue('make_graph_dataset')
+
+    # Single target case (e.g. ZINC-like)
+    single_target = make_dataset(
+        num_graphs=4,
+        in_features=3,
+        num_targets=1,
+        task_type='regression'
+    )
+
+    # Multi-target case (e.g. QM9-like)
+    multi_target = make_dataset(
+        num_graphs=4,
+        in_features=3,
+        num_targets=5,  # Multiple properties per molecule
+        task_type='regression'
+    )
+
+    # Case with edge attributes (e.g. molecular graphs)
+    edge_attr = make_dataset(
+        num_graphs=4,
+        in_features=3,
+        num_targets=2,
+        task_type='regression',
+        edge_attr_dim=4  # e.g. distance, bond type encoding
+    )
+
+    # No node features case (e.g. QM7b-like)
+    graph_no_x = Data(
+        x=None,
+        edge_index=torch.tensor([[0, 1], [1, 0]], dtype=torch.long),
+        y=torch.randn(3)  # 3 quantum properties
+    )
+
+    return {
+        'single_target': DataLoader(single_target, batch_size=2),
+        'multi_target': DataLoader(multi_target, batch_size=2),
+        'edge_attr': DataLoader(edge_attr, batch_size=2),
+        'no_features': DataLoader([graph_no_x], batch_size=1),
+        'varied_graphs': DataLoader(
+            make_dataset(
+                num_graphs=4,
+                in_features=3,
+                num_targets=2,
+                task_type='regression',
+                min_nodes=2,
+                max_nodes=10  # More variation in graph sizes
+            ),
+            batch_size=2
+        )
+    }
