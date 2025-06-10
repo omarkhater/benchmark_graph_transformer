@@ -9,6 +9,16 @@ from torch_geometric.data import Batch
 from torch_geometric.loader import DataLoader
 
 
+def _will_labels_be_squeezed(y: Tensor) -> bool:
+    """Check if labels will be squeezed to 1D by _reshape_labels."""
+    return y.ndim == 1 or (y.ndim == 2 and y.size(1) == 1)
+
+
+def _is_binary_logits(logits: Tensor) -> bool:
+    """Check if logits represent binary classification output."""
+    return logits.ndim == 2 and logits.size(1) == 1
+
+
 def _reshape_logits(logits: Tensor, y: Tensor) -> Tensor:
     """
     Match logits’ first dimension to `y` while preserving class dimension.
@@ -34,10 +44,14 @@ def _reshape_logits(logits: Tensor, y: Tensor) -> Tensor:
     Tensor
         Logits reshaped to match the label format.
     """
+    # Flatten higher-dimensional logits to 2D
     if logits.ndim > 2:
         logits = logits.reshape(-1, logits.size(-1))
-    if logits.ndim == 2 and logits.size(1) == 1 and y.ndim == 1:
+
+    # For binary classification, squeeze logits if labels will be 1D
+    if _is_binary_logits(logits) and _will_labels_be_squeezed(y):
         logits = logits.squeeze(1)
+
     return logits
 
 
