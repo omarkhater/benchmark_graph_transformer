@@ -25,8 +25,6 @@ def _reshape_logits(logits: Tensor, y: Tensor) -> Tensor:
 
     Rules
     -----
-    * If logits are > 2-D (e.g., graph-level models with H×W output),
-      flatten everything except the last dim (`C`) so we get shape `(N, C)`.
     * For binary classification:
         - If labels are 2D (node-level, shape (N, 1)), keep logits as (N, 1)
         - If labels are 1D (graph-level, shape (N,)), squeeze logits to (N,)
@@ -44,10 +42,6 @@ def _reshape_logits(logits: Tensor, y: Tensor) -> Tensor:
     Tensor
         Logits reshaped to match the label format.
     """
-    # Flatten higher-dimensional logits to 2D
-    if logits.ndim > 2:
-        logits = logits.reshape(-1, logits.size(-1))
-
     # For binary classification, squeeze logits if labels will be 1D
     if _is_binary_logits(logits) and _will_labels_be_squeezed(y):
         logits = logits.squeeze(1)
