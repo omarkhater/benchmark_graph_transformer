@@ -107,6 +107,20 @@ class DummyDataset:
         return self._list[idx]
 
 
+class ClassificationDataset:
+    """Wrapper for classification data with correct num_classes."""
+
+    def __init__(self, data_list: list[Data], num_classes: int):
+        self._data_list = data_list
+        self.num_classes = num_classes
+
+    def __len__(self) -> int:
+        return len(self._data_list)
+
+    def __getitem__(self, idx: int) -> Data:
+        return self._data_list[idx]
+
+
 @pytest.fixture
 def graph_loader() -> DataLoader:
     """Provide a DataLoader for two graph‐level samples with float targets."""
@@ -611,6 +625,110 @@ class DataManager:
 def data_manager(make_node_data, make_graph_dataset) -> DataManager:
     """Provides DataManager instance for unified data access."""
     return DataManager(make_node_data, make_graph_dataset)
+
+
+@pytest.fixture
+def graph_classification_suite(request) -> dict[str, DataLoader]:
+    """Provides a suite of classification test cases.
+
+    Returns a dictionary containing different DataLoader configurations for
+    classification tasks:
+        - node_binary: Node-level binary classification
+        - node_multiclass: Node-level multiclass classification
+        - graph_binary: Graph-level binary classification
+        - graph_multiclass: Graph-level multiclass classification
+        - masked_nodes: Node classification with train/val/test masks
+        - sparse_features: Classification with sparse node features
+        - edge_attr: With edge attributes for attention testing
+
+    This comprehensive suite helps test behavior across different
+    classification scenarios found in real-world datasets.
+
+    Returns:
+        dict[str, DataLoader]: Named test cases mapping to DataLoaders
+    """
+    make_node = request.getfixturevalue('make_node_data')
+    make_graph = request.getfixturevalue('make_graph_dataset')
+
+    # Node-level binary classification
+    node_binary = make_node(
+        num_nodes=4,
+        in_features=3,
+        num_targets=1,
+        task_type='classification'
+    )
+
+    # Node-level multiclass (3 classes)
+    node_multi = make_node(
+        num_nodes=4,
+        in_features=3,
+        num_targets=3,
+        task_type='classification'
+    )
+
+    # Graph-level binary classification
+    graph_binary = make_graph(
+        num_graphs=4,
+        in_features=3,
+        num_targets=1,
+        task_type='classification'
+    )
+
+    # Graph-level multiclass classification
+    graph_multi = make_graph(
+        num_graphs=4,
+        in_features=3,
+        num_targets=3,
+        task_type='classification'
+    )
+
+    # With edge attributes
+    edge_attr = make_graph(
+        num_graphs=4,
+        in_features=3,
+        num_targets=2,
+        task_type='classification',
+        edge_attr_dim=4  # e.g. edge types or distances
+    )
+
+    # With sparse features (like citation networks)
+    sparse_node = make_node(
+        num_nodes=4,
+        in_features=8,
+        num_targets=2,
+        task_type='classification',
+        sparse=True
+    )
+
+    # Add train/val/test masks
+    masked = make_node(
+        num_nodes=100,
+        in_features=8,
+        num_targets=3,
+        task_type='classification'
+    )
+    train_mask, val_mask, test_mask = create_train_val_test_masks(
+        100, train_ratio=0.6, val_ratio=0.2
+    )
+    masked.train_mask = train_mask
+    masked.val_mask = val_mask
+    masked.test_mask = test_mask
+
+    return {
+        'node_binary': DataLoader([node_binary], batch_size=1),
+        'node_multiclass': DataLoader([node_multi], batch_size=1),
+        'graph_binary': DataLoader(
+            ClassificationDataset(graph_binary, 2), batch_size=2
+        ),
+        'graph_multiclass': DataLoader(
+            ClassificationDataset(graph_multi, 3), batch_size=2
+        ),
+        'edge_attr': DataLoader(
+            ClassificationDataset(edge_attr, 2), batch_size=2
+        ),
+        'sparse_features': DataLoader([sparse_node], batch_size=1),
+        'masked_nodes': DataLoader([masked], batch_size=1)
+    }
 
 
 @pytest.fixture

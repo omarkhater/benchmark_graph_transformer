@@ -3,7 +3,7 @@ import pytest
 import torch
 from torch import Tensor
 from torch.nn import Module, Parameter
-from torch_geometric.data import Data
+from torch_geometric.data import Batch, Data
 from torch_geometric.loader import DataLoader
 
 
@@ -25,6 +25,59 @@ class DummyModel(Module):
             torch.arange(labels.size(0), device=labels.device), labels
         ] = 1.0
         return logits * self.scale
+
+
+class DummyNodeClassifier(Module):
+    """Perfect node-classifier (identity logits)."""
+
+    def __init__(self, num_classes: int):
+        super().__init__()
+        self.num_classes = num_classes
+
+    def forward(self, data: Data):
+        y = data.y.view(-1)
+        if self.num_classes == 1:                         # binary → (N, 1)
+            return y.float().unsqueeze(1)
+        logits = torch.zeros(y.size(0), self.num_classes, device=y.device)
+        logits[torch.arange(y.size(0), device=y.device), y] = 1.0
+        return logits
+
+
+class DummyGraphClassifier(Module):
+    """Perfect graph-classifier."""
+
+    def __init__(self, num_classes: int):
+        super().__init__()
+        self.num_classes = num_classes
+
+    def forward(self, batch: Batch):
+        y = batch.y
+        if self.num_classes == 1:
+            return y.float().unsqueeze(1) if y.ndim == 1 else y.float()
+        logits = torch.zeros(y.size(0), self.num_classes, device=y.device)
+        logits[torch.arange(y.size(0), device=y.device), y] = 1.0
+        return logits
+
+
+class DummyRegressor(Module):
+    """Returns labels untouched – perfect regressor."""
+
+    def __init__(self, out_dim: int = 1):
+        super().__init__()
+        self.out_dim = out_dim
+
+    def forward(self, batch: Batch):
+        y = batch.y.clone().float()
+        # For multi-target cases, we need to ensure 2D output
+        # and preserve the original shape if present
+        if self.out_dim > 1:
+            # If input is already 2D with matching out_dim, preserve it
+            if y.ndim == 2 and y.size(1) == self.out_dim:
+                return y
+            # Otherwise reshape to match expected (N, out_dim) shape
+            return y.view(-1, self.out_dim)
+        # For single target, always return (N, 1)
+        return y.view(-1, 1)
 
 
 @pytest.fixture

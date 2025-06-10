@@ -19,6 +19,7 @@ from .fixtures.data_fixtures import (
     data_manager,
     generic_loader,
     graph_batch,
+    graph_classification_suite,
     graph_loader,
     graph_reg_multi_target,
     graph_reg_single_target,
@@ -44,6 +45,9 @@ from .fixtures.dataset_fixtures import (
     ogb_node_dataset,
 )
 from .fixtures.model_fixtures import (
+    DummyGraphClassifier,
+    DummyNodeClassifier,
+    DummyRegressor,
     dummy_model,
     ensure_model_has_parameter,
 )
@@ -57,6 +61,9 @@ __all__ = [
     # Model fixtures
     'dummy_model',
     'ensure_model_has_parameter',
+    'DummyNodeClassifier',
+    'DummyGraphClassifier',
+    'DummyRegressor',
 
     # Data fixtures
     'graph_loader',
@@ -79,6 +86,7 @@ __all__ = [
     'graph_reg_multi_target',
     'data_manager',
     'graph_regression_suite',
+    'graph_classification_suite',
     'masked_node_loader',
     'cora_style_loader',
 
