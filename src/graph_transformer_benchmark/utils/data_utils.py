@@ -101,11 +101,13 @@ def infer_num_node_features(loader: DataLoader) -> int:
     """Return the input feature dimension inferred from ``loader``."""
     dataset = loader.dataset
     if hasattr(dataset, "num_node_features"):
-        return int(dataset.num_node_features)  # type: ignore[attr-defined]
+        return int(dataset.num_node_features)
     parent = getattr(dataset, "dataset", None)
     if hasattr(parent, "num_node_features"):
-        return int(parent.num_node_features)  # type: ignore[attr-defined]
+        return int(parent.num_node_features)
     batch = next(iter(loader))
+    if batch.x is None:
+        return 0
     return int(batch.x.size(-1))
 
 
@@ -113,10 +115,10 @@ def infer_num_classes(loader: DataLoader) -> int:
     """Return the number of target classes inferred from ``loader``."""
     dataset = loader.dataset
     if hasattr(dataset, "num_classes"):
-        return int(dataset.num_classes)  # type: ignore[attr-defined]
+        return int(dataset.num_classes)
     parent = getattr(dataset, "dataset", None)
     if hasattr(parent, "num_classes"):
-        return int(parent.num_classes)  # type: ignore[attr-defined]
+        return int(parent.num_classes)
     batch = next(iter(loader))
     labels = batch.y
     return int(
