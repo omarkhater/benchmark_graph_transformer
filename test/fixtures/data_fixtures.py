@@ -6,6 +6,7 @@ from typing import Callable, Literal
 
 import pytest
 import torch
+from torch.utils.data import Subset
 from torch_geometric.data import Batch, Data
 from torch_geometric.loader import DataLoader
 
@@ -113,6 +114,29 @@ class ClassificationDataset:
     def __init__(self, data_list: list[Data], num_classes: int):
         self._data_list = data_list
         self.num_classes = num_classes
+
+    def __len__(self) -> int:
+        return len(self._data_list)
+
+    def __getitem__(self, idx: int) -> Data:
+        return self._data_list[idx]
+
+
+class DatasetWithAttributes:
+    """Dataset wrapper that mimics real PyG datasets with attributes."""
+
+    def __init__(
+        self,
+        data_list: list[Data],
+        *,
+        num_node_features: int | None = None,
+        num_classes: int | None = None
+    ):
+        self._data_list = data_list
+        if num_node_features is not None:
+            self.num_node_features = num_node_features
+        if num_classes is not None:
+            self.num_classes = num_classes
 
     def __len__(self) -> int:
         return len(self._data_list)
@@ -631,6 +655,14 @@ def data_manager(make_node_data, make_graph_dataset) -> DataManager:
 def graph_classification_suite(request) -> dict[str, DataLoader]:
     """Provides a suite of classification test cases.
 
+    The fixture can be parameterized to control the numbers used in the
+    data generation.
+    Use pytest.mark.parametrize with a dict of config overrides:
+
+    @pytest.mark.parametrize('graph_classification_suite', [
+        {'node_binary_targets': 1, 'multiclass_targets': 4}
+    ], indirect=True)
+
     Returns a dictionary containing different DataLoader configurations for
     classification tasks:
         - node_binary: Node-level binary classification
@@ -647,93 +679,176 @@ def graph_classification_suite(request) -> dict[str, DataLoader]:
     Returns:
         dict[str, DataLoader]: Named test cases mapping to DataLoaders
     """
+    # Default configuration - can be overridden by test parameters
+    default_config = {
+        'node_binary_targets': 1,
+        'multiclass_targets': 3,
+        'edge_attr_targets': 2,
+        'sparse_targets': 2,
+        'masked_targets': 3,
+        'num_nodes': 4,
+        'in_features': 3,
+        'num_graphs': 4,
+        'masked_nodes': 100,
+        'sparse_features': 8,
+        'edge_attr_dim': 4,
+    }
+
+    # Override with test-specific parameters if provided
+    config = default_config.copy()
+    if hasattr(request, 'param') and request.param:
+        config.update(request.param)
+
     make_node = request.getfixturevalue('make_node_data')
     make_graph = request.getfixturevalue('make_graph_dataset')
 
     # Node-level binary classification
     node_binary = make_node(
-        num_nodes=4,
-        in_features=3,
-        num_targets=1,
+        num_nodes=config['num_nodes'],
+        in_features=config['in_features'],
+        num_targets=config['node_binary_targets'],
         task_type='classification'
     )
 
-    # Node-level multiclass (3 classes)
+    # Node-level multiclass
     node_multi = make_node(
-        num_nodes=4,
-        in_features=3,
-        num_targets=3,
+        num_nodes=config['num_nodes'],
+        in_features=config['in_features'],
+        num_targets=config['multiclass_targets'],
         task_type='classification'
     )
 
     # Graph-level binary classification
     graph_binary = make_graph(
-        num_graphs=4,
-        in_features=3,
-        num_targets=1,
+        num_graphs=config['num_graphs'],
+        in_features=config['in_features'],
+        num_targets=config['node_binary_targets'],
         task_type='classification'
     )
 
     # Graph-level multiclass classification
     graph_multi = make_graph(
-        num_graphs=4,
-        in_features=3,
-        num_targets=3,
+        num_graphs=config['num_graphs'],
+        in_features=config['in_features'],
+        num_targets=config['multiclass_targets'],
         task_type='classification'
     )
 
     # With edge attributes
     edge_attr = make_graph(
-        num_graphs=4,
-        in_features=3,
-        num_targets=2,
+        num_graphs=config['num_graphs'],
+        in_features=config['in_features'],
+        num_targets=config['edge_attr_targets'],
         task_type='classification',
-        edge_attr_dim=4  # e.g. edge types or distances
+        edge_attr_dim=config['edge_attr_dim']
     )
 
     # With sparse features (like citation networks)
     sparse_node = make_node(
-        num_nodes=4,
-        in_features=8,
-        num_targets=2,
+        num_nodes=config['num_nodes'],
+        in_features=config['sparse_features'],
+        num_targets=config['sparse_targets'],
         task_type='classification',
         sparse=True
     )
 
     # Add train/val/test masks
     masked = make_node(
-        num_nodes=100,
-        in_features=8,
-        num_targets=3,
+        num_nodes=config['masked_nodes'],
+        in_features=config['sparse_features'],
+        num_targets=config['masked_targets'],
         task_type='classification'
     )
     train_mask, val_mask, test_mask = create_train_val_test_masks(
-        100, train_ratio=0.6, val_ratio=0.2
+        config['masked_nodes'], train_ratio=0.6, val_ratio=0.2
     )
     masked.train_mask = train_mask
     masked.val_mask = val_mask
     masked.test_mask = test_mask
 
+    # Create datasets with num_node_features attribute (real PyG usage)
+    # Use the actual feature dimension from the graph data
+    actual_features = (
+        graph_binary[0].x.size(-1) if graph_binary[0].x is not None else 0
+    )
+
+    # Create a Subset case to test parent dataset access
+    pyg_style_dataset = DatasetWithAttributes(
+        graph_binary,
+        num_node_features=actual_features,
+        num_classes=2  # Binary classification for PyG style
+    )
+    subset_dataset = Subset(pyg_style_dataset, [0, 1])
+
+    # Create DataLoaders and add expected_classes attribute
+    node_binary_loader = DataLoader([node_binary], batch_size=1)
+    # Binary with (N, 1) shape -> 1 class dimension
+    node_binary_loader.expected_classes = config['node_binary_targets']
+
+    node_multi_loader = DataLoader([node_multi], batch_size=1)
+    # Multiclass targets
+    node_multi_loader.expected_classes = config['multiclass_targets']
+
+    # For ClassificationDataset, we pass the desired num_classes directly
+    graph_binary_num_classes = config['node_binary_targets'] + 1
+    graph_binary_loader = DataLoader(
+        ClassificationDataset(graph_binary, graph_binary_num_classes),
+        batch_size=2
+    )
+    graph_binary_loader.expected_classes = graph_binary_num_classes
+
+    graph_multi_num_classes = config['multiclass_targets']
+    graph_multi_loader = DataLoader(
+        ClassificationDataset(graph_multi, graph_multi_num_classes),
+        batch_size=2
+    )
+    graph_multi_loader.expected_classes = graph_multi_num_classes
+
+    edge_attr_num_classes = config['edge_attr_targets']
+    edge_attr_loader = DataLoader(
+        ClassificationDataset(edge_attr, edge_attr_num_classes), batch_size=2
+    )
+    edge_attr_loader.expected_classes = edge_attr_num_classes
+
+    sparse_loader = DataLoader([sparse_node], batch_size=1)
+    sparse_loader.expected_classes = config['sparse_targets']
+
+    masked_loader = DataLoader([masked], batch_size=1)
+    masked_loader.expected_classes = config['masked_targets']
+
+    # For PyG style dataset, num_classes is set during creation
+    pyg_style_num_classes = 2  # Set in DatasetWithAttributes creation above
+    pyg_loader = DataLoader(pyg_style_dataset, batch_size=2)
+    pyg_loader.expected_classes = pyg_style_num_classes
+
+    subset_loader = DataLoader(subset_dataset, batch_size=2)
+    # Subset inherits from parent dataset
+    subset_loader.expected_classes = pyg_style_num_classes
+
     return {
-        'node_binary': DataLoader([node_binary], batch_size=1),
-        'node_multiclass': DataLoader([node_multi], batch_size=1),
-        'graph_binary': DataLoader(
-            ClassificationDataset(graph_binary, 2), batch_size=2
-        ),
-        'graph_multiclass': DataLoader(
-            ClassificationDataset(graph_multi, 3), batch_size=2
-        ),
-        'edge_attr': DataLoader(
-            ClassificationDataset(edge_attr, 2), batch_size=2
-        ),
-        'sparse_features': DataLoader([sparse_node], batch_size=1),
-        'masked_nodes': DataLoader([masked], batch_size=1)
+        'node_binary': node_binary_loader,
+        'node_multiclass': node_multi_loader,
+        'graph_binary': graph_binary_loader,
+        'graph_multiclass': graph_multi_loader,
+        'edge_attr': edge_attr_loader,
+        'sparse_features': sparse_loader,
+        'masked_nodes': masked_loader,
+        'pyg_style': pyg_loader,
+        'subset_with_parent': subset_loader
     }
 
 
 @pytest.fixture
 def graph_regression_suite(request) -> dict[str, DataLoader]:
     """Provides a suite of graph regression test cases.
+
+    The fixture can be parameterized to control the numbers used in
+    data generation.
+    Use pytest.mark.parametrize with a dict of config overrides:
+
+    @pytest.mark.parametrize('graph_regression_suite', [
+        {'single_targets': 2, 'multi_targets': 7}
+    ], indirect=True)
 
     Returns a dictionary containing different DataLoader configurations for
     graph regression tasks:
@@ -749,39 +864,71 @@ def graph_regression_suite(request) -> dict[str, DataLoader]:
     Returns:
         dict[str, DataLoader]: Named test cases mapping to DataLoaders
     """
+    # Default configuration - can be overridden by test parameters
+    default_config = {
+        'single_targets': 1,
+        'multi_targets': 5,
+        'edge_attr_targets': 2,
+        'varied_targets': 2,
+        'no_features_targets': 3,
+        'num_graphs': 4,
+        'in_features': 3,
+        'edge_attr_dim': 4,
+        'min_nodes': 2,
+        'max_nodes': 10,
+    }
+
+    # Override with test-specific parameters if provided
+    config = default_config.copy()
+    if hasattr(request, 'param') and request.param:
+        config.update(request.param)
+
     make_dataset = request.getfixturevalue('make_graph_dataset')
 
     # Single target case (e.g. ZINC-like)
     single_target = make_dataset(
-        num_graphs=4,
-        in_features=3,
-        num_targets=1,
+        num_graphs=config['num_graphs'],
+        in_features=config['in_features'],
+        num_targets=config['single_targets'],
         task_type='regression'
     )
 
     # Multi-target case (e.g. QM9-like)
     multi_target = make_dataset(
-        num_graphs=4,
-        in_features=3,
-        num_targets=5,  # Multiple properties per molecule
+        num_graphs=config['num_graphs'],
+        in_features=config['in_features'],
+        num_targets=config['multi_targets'],  # Multiple properties per mol
         task_type='regression'
     )
 
     # Case with edge attributes (e.g. molecular graphs)
     edge_attr = make_dataset(
-        num_graphs=4,
-        in_features=3,
-        num_targets=2,
+        num_graphs=config['num_graphs'],
+        in_features=config['in_features'],
+        num_targets=config['edge_attr_targets'],
         task_type='regression',
-        edge_attr_dim=4  # e.g. distance, bond type encoding
+        edge_attr_dim=config['edge_attr_dim']  # e.g. distance, bond type
     )
 
     # No node features case (e.g. QM7b-like)
     graph_no_x = Data(
         x=None,
         edge_index=torch.tensor([[0, 1], [1, 0]], dtype=torch.long),
-        y=torch.randn(3)  # 3 quantum properties
+        y=torch.randn(config['no_features_targets'])  # quantum props
     )
+
+    # Create datasets with num_node_features attribute (real PyG usage)
+    # Use the actual feature dimension from the graph data
+    actual_features = (
+        single_target[0].x.size(-1) if single_target[0].x is not None else 0
+    )
+
+    # Create a Subset case to test parent dataset access
+    pyg_style_regression = DatasetWithAttributes(
+        single_target,
+        num_node_features=actual_features
+    )
+    subset_regression = Subset(pyg_style_regression, [0, 1])
 
     return {
         'single_target': DataLoader(single_target, batch_size=2),
@@ -790,13 +937,15 @@ def graph_regression_suite(request) -> dict[str, DataLoader]:
         'no_features': DataLoader([graph_no_x], batch_size=1),
         'varied_graphs': DataLoader(
             make_dataset(
-                num_graphs=4,
-                in_features=3,
-                num_targets=2,
+                num_graphs=config['num_graphs'],
+                in_features=config['in_features'],
+                num_targets=config['varied_targets'],
                 task_type='regression',
-                min_nodes=2,
-                max_nodes=10  # More variation in graph sizes
+                min_nodes=config['min_nodes'],
+                max_nodes=config['max_nodes']  # More variation in graph sizes
             ),
             batch_size=2
-        )
+        ),
+        'pyg_style': DataLoader(pyg_style_regression, batch_size=2),
+        'subset_with_parent': DataLoader(subset_regression, batch_size=2)
     }
