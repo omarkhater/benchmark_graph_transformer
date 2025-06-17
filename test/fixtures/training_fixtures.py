@@ -53,7 +53,7 @@ def optimizer(dummy_model) -> SGD:
     )
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture()
 def patch_training_dependencies(
     monkeypatch: Any,
     dummy_model: Module,
