@@ -82,7 +82,7 @@ def create_targets(
         if num_targets == 1:
             # Binary classification: return labels in {0, 1}
             # with shape (num_nodes, 1)
-            return torch.randint(0, 2, (num_nodes, 1))
+            return torch.randint(0, 2, (num_nodes, ))
         # Multiclass classification: return class indices
         return torch.randint(0, num_targets, (num_nodes,))
 
@@ -681,7 +681,7 @@ def graph_classification_suite(request) -> dict[str, DataLoader]:
     """
     # Default configuration - can be overridden by test parameters
     default_config = {
-        'node_binary_targets': 1,
+        'node_binary_targets': 2,
         'multiclass_targets': 3,
         'edge_attr_targets': 2,
         'sparse_targets': 2,

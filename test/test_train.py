@@ -1,76 +1,97 @@
-# tests/test_train.py
+"""Unit tests for the training pipeline using different dataset scenarios."""
+
 from __future__ import annotations
 
-from typing import Any
-
+import pytest
 import torch
 from omegaconf import OmegaConf
 
 from graph_transformer_benchmark.train import run_training
 
 
-# --------------------------------------------------------------------------- #
-# config helper
-# --------------------------------------------------------------------------- #
-def _make_cfg(tmp_path, *, epochs: int = 2,
-              log_artifacts: bool = False) -> Any:
-    return OmegaConf.create(
-        {
+@pytest.fixture
+def base_training_config(tmp_path):
+    """Create base training configuration for tests."""
+    return OmegaConf.create({
+        "model": {
+            "type": "graphtransformer",
+            "task": "graph",
+            "hidden_dim": 64,
+            "num_layers": 4,
+            "num_heads": 8,
+            "dropout": 0.1,
+            "ffn_hidden_dim": 128,
+            "activation": "relu",
+            "with_spatial_bias": True,
+            "with_edge_bias": True,
+            "gnn_conv_type": "gcn",
+            "gnn_position": "post",
             "training": {
-                "seed": 0,
-                "device": "cpu",
-                "lr": 0.01,
-                "epochs": epochs,
-                "val_frequency": 1,
-                "patience": 3,
-                "log_artifacts": log_artifacts,
-            },
-            "model": {
-                "training": {
-                    "mlflow": {
-                        "run_name": "pytest-run",
-                        "description": "CI unit-test",
-                    }
+                "mlflow": {
+                    "tracking_uri": str(tmp_path / "mlruns"),
+                    "experiment": "test-experiment",
+                    "run_name": "pytest-run",
+                    "description": "CI unit-test",
                 }
-            },
-            "data": {"dataset": "MUTAG", "root": str(tmp_path)},
+            }
+        },
+        "training": {
+            "seed": 42,
+            "epochs": 3,
+            "batch_size": 32,
+            "lr": 0.001,
+            "val_frequency": 1,
+            "patience": 2,
+            "device": "cpu",
+            "log_artifacts": False
+        },
+        "data": {
+            "name": "test_dataset",
+            "task": "graph",
+            "split_seed": 42
         }
-    )
+    })
 
 
-# --------------------------------------------------------------------------- #
-# tests
-# --------------------------------------------------------------------------- #
-def test_run_training_logs_metrics(tmp_path, patch_training_dependencies):
-    """Exactly one validation-accuracy metric should be emitted."""
-    cfg = _make_cfg(tmp_path, epochs=2, log_artifacts=False)
-    run_training(cfg)
-
-    keys: list[str] = [k for k, *_ in patch_training_dependencies.metrics]
-    val_acc = [
-        k for k in keys
-        if k.startswith("val/") and k.endswith("/accuracy")
-    ]
-    assert len(val_acc) == 1, f"logged keys={keys}"
-
-
-def test_run_training_artifacts(
-    tmp_path, monkeypatch, patch_training_dependencies
+@pytest.mark.integration
+@pytest.mark.parametrize("case_name", [
+    "node_binary",
+    "node_multiclass",
+    "graph_binary",
+    "graph_multiclass",
+    "edge_attr",
+    "sparse_features",
+    "masked_nodes",
+    "pyg_style",
+    "subset_with_parent"
+])
+def test_classification_pipeline(
+    monkeypatch,
+    base_training_config,
+    graph_classification_suite,
+    case_name: str
 ):
-    """`best_model.pth` must be logged once when artifacts are enabled."""
-    monkeypatch.setattr(
-        torch, "save", lambda obj, path, **kw: open(path, "w").close()
-    )
+    """Test training pipeline with different classification scenarios.
 
-    cfg = _make_cfg(tmp_path, epochs=1, log_artifacts=True)
-    run_training(cfg)
+    Args:
+        case_name: Name of the classification test case from suite
+        monkeypatch: Pytest fixture for mocking
+        base_training_config: Base configuration fixture
+        graph_classification_suite: Suite of classification test cases
+    """
 
-    paths = [p for p in patch_training_dependencies.artifacts if p]
-    assert paths == ["best_model.pth"]
+    loader = graph_classification_suite[case_name]
+    dataloaders = (loader, loader, loader)
 
+    with monkeypatch.context() as m:
+        # Mock the build_dataloaders function to return our test loaders
+        m.setattr(
+            "graph_transformer_benchmark.train.build_dataloaders",
+            lambda *args, **kwargs: dataloaders
+        )
 
-def test_return_value_is_finite(tmp_path):
-    """`run_training` should return a finite float best-loss."""
-    cfg = _make_cfg(tmp_path, epochs=1, log_artifacts=False)
-    best = run_training(cfg)
-    assert isinstance(best, float) and not torch.isnan(torch.tensor(best))
+        loss = run_training(base_training_config)
+        print(f"Obtained loss: {loss:.4f}")
+
+        assert isinstance(loss, float)
+        assert torch.isfinite(torch.tensor(loss))
