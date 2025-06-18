@@ -7,11 +7,12 @@ contains the generic training / validation loop.
 """
 from __future__ import annotations
 
+import logging
+import traceback
+
 import mlflow
 import torch
 from omegaconf import DictConfig
-import logging
-import traceback
 
 from graph_transformer_benchmark.data import build_dataloaders
 from graph_transformer_benchmark.graph_models import build_model
@@ -60,9 +61,9 @@ def run_training(cfg: DictConfig) -> float:
         configure_determinism(cfg.training.seed, torch.cuda.is_available())
 
         init_mlflow(cfg)
-        run_name = getattr(cfg.model.training.mlflow, "run_name", None)
+        run_name = getattr(cfg.training.mlflow, "run_name", None)
         description = getattr(
-            cfg.model.training.mlflow, "description", None
+            cfg.training.mlflow, "description", None
         )
         if run_name is None:
             run_name = build_run_name(cfg)
@@ -87,9 +88,15 @@ def run_training(cfg: DictConfig) -> float:
             device = get_device(cfg.training.device)
             num_features = infer_num_node_features(train_loader)
             num_classes = infer_num_classes(train_loader)
-            model = build_model(cfg.model, num_features, num_classes).to(device)
-            model = BatchEnrichedModel(model, cfg.model, device).to(device)
-            optimizer = torch.optim.Adam(model.parameters(), lr=cfg.training.lr)
+            model = build_model(
+                cfg.model, num_features, num_classes).to(device)
+            model = BatchEnrichedModel(
+                model, cfg.model, device).to(device)
+            optimizer = torch.optim.Adam(
+                model.parameters(),
+                lr=cfg.training.lr,
+                weight_decay=cfg.training.weight_decay,
+            )
 
             trainer = GraphTransformerTrainer(
                 cfg=cfg,
@@ -115,4 +122,4 @@ def run_training(cfg: DictConfig) -> float:
         mlflow.log_param("exception", str(e))
         mlflow.log_param("exception_type", type(e).__name__)
         mlflow.log_param("traceback", traceback.format_exc())
-    return 0.0
+    return float("nan")
