@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import mlflow
 import pytest
 import torch
+from omegaconf import OmegaConf
 from torch.nn import Module
 from torch.optim import SGD
 from torch_geometric.data import Data
@@ -125,3 +126,87 @@ def patch_training_dependencies(
     monkeypatch.setattr(mlflow, "active_run", lambda: MagicMock())
 
     return SimpleNamespace(metrics=metrics, artifacts=artifacts)
+
+
+@pytest.fixture(autouse=True)
+def disable_mlflow(monkeypatch):
+    """Disable all MLflow interactions in run_training."""
+    monkeypatch.setattr(train_mod, "init_mlflow", lambda cfg: None)
+    monkeypatch.setattr(train_mod, "log_config", lambda cfg: None)
+
+    class DummyRun:
+        def __enter__(self): return self
+        def __exit__(self, exc_type, exc_val, exc_tb): return False
+
+    mlflow = train_mod.mlflow
+    monkeypatch.setattr(
+        mlflow, "start_run", lambda *args, **kwargs: DummyRun())
+    for fn in (
+        "set_experiment",
+        "set_tag",
+        "log_param",
+        "log_params",
+        "log_metric",
+        "log_metrics",
+        "log_artifact",
+    ):
+        monkeypatch.setattr(mlflow, fn, lambda *args, **kwargs: None)
+
+
+@pytest.fixture
+def base_training_config(tmp_path):
+    """Create base training configuration for tests."""
+    return OmegaConf.create({
+        "model": {
+            "type": "graphtransformer",
+            "task": "graph",
+            "hidden_dim": 64,
+            "num_layers": 4,
+            "num_heads": 8,
+            "dropout": 0.1,
+            "ffn_hidden_dim": 128,
+            "activation": "relu",
+
+            # Required bias config
+            "with_spatial_bias": True,
+            "num_spatial": 32,
+            "with_edge_bias": True,
+            "num_edges": 16,
+            "with_hop_bias": True,
+            "num_hops": 5,
+
+            # Required positional encoding config
+            "with_degree_enc": True,
+            "max_degree": 32,
+            "with_eig_enc": True,
+            "num_eigenc": 8,
+            "with_svd_enc": True,
+            "num_svdenc": 8,
+
+            # GNN integration config
+            "gnn_conv_type": "gcn",
+            "gnn_position": "post",
+            "use_super_node": False,
+        },
+        "training": {
+            "seed": 42,
+            "epochs": 3,
+            "batch_size": 32,
+            "lr": 0.001,
+            "val_frequency": 1,
+            "patience": 2,
+            "device": "cpu",
+            "log_artifacts": False,
+            "mlflow": {
+                    "tracking_uri": str(tmp_path / "mlruns"),
+                    "experiment_name": "test-experiment",
+                    "run_name": "pytest-run",
+                    "description": "CI unit-test",
+                }
+        },
+        "data": {
+            "dataset": "test_dataset",
+            "task": "graph",
+            "split_seed": 42
+        }
+    })

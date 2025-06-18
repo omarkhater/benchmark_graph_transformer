@@ -52,7 +52,9 @@ from .fixtures.model_fixtures import (
     ensure_model_has_parameter,
 )
 from .fixtures.training_fixtures import (
+    base_training_config,
     device,
+    disable_mlflow,
     optimizer,
     patch_training_dependencies,
 )
@@ -109,4 +111,6 @@ __all__ = [
     'device',
     'optimizer',
     'patch_training_dependencies',
+    'disable_mlflow',
+    'base_training_config'
 ]
