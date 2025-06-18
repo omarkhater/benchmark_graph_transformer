@@ -8,9 +8,10 @@ from .data_utils import (
 from .device import get_device
 from .mlflow_utils import init_mlflow, log_config, log_health_metrics
 from .model_utils import (
-    BatchEnrichedModel,
+    BatchEnrichmentWrapper,
     TaskKind,
     build_run_name,
+    create_model,
     infer_task_and_loss,
 )
 from .seed import configure_determinism, set_seed, worker_init_fn
@@ -29,6 +30,7 @@ __all__ = [
     "TaskKind",
     "build_run_name",
     "log_health_metrics",
-    "BatchEnrichedModel",
+    "BatchEnrichmentWrapper",
     "flatten_cfg",
+    "create_model",
 ]

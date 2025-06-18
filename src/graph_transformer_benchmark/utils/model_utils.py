@@ -12,25 +12,48 @@ from graph_transformer_benchmark.data import enrich_batch
 
 TaskKind = Literal["multilabel", "multiclass", "regression"]
 
-__all__ = ["infer_task_and_loss", "TaskKind"]
+
+def create_model(
+    model_fn: callable,
+    model_cfg: DictConfig,
+    sample_batch: Data,
+    num_classes: int,
+    device: torch.device
+) -> nn.Module:
+    """Create a model with correct input dimensions and batch enrichment.
+
+    Args:
+        model_fn: Function that builds the base model
+        model_cfg: Model configuration
+        sample_batch: Sample batch to determine feature dimensions
+        num_classes: Number of output classes/targets
+        device: Device to create model on
+    """
+    enriched = enrich_batch(sample_batch, model_cfg)
+    num_features = enriched.x.size(1) if enriched.x is not None else 0
+    base_model = model_fn(model_cfg, num_features, num_classes).to(device)
+    return BatchEnrichmentWrapper(base_model, model_cfg, device)
 
 
-class BatchEnrichedModel(nn.Module):
-    """Wraps a GraphTransformer so every batch is first enriched."""
-    def __init__(self,
-                 base_model: nn.Module,
-                 model_cfg: DictConfig,
-                 device: torch.device,
-                 ) -> None:
+class BatchEnrichmentWrapper(nn.Module):
+    """Simple wrapper that enriches batches during forward pass."""
+
+    def __init__(
+            self,
+            model: nn.Module,
+            cfg: DictConfig,
+            device: torch.device
+            ):
         super().__init__()
-        self.base_model = base_model
-        self.model_cfg = model_cfg
+        self.model = model
+        self.cfg = cfg
         self.device = device
 
     def forward(self, batch: Data):
-        batch = enrich_batch(batch, self.model_cfg)
+        """Forward pass with automatic batch enrichment."""
+        batch = enrich_batch(batch, self.cfg)
         batch = batch.to(self.device)
-        return self.base_model(batch)
+        return self.model(batch)
 
 
 def build_run_name(cfg: DictConfig) -> str:

@@ -20,12 +20,11 @@ from graph_transformer_benchmark.training.graph_transformer_trainer import (
     GraphTransformerTrainer,
 )
 from graph_transformer_benchmark.utils import (
-    BatchEnrichedModel,
     build_run_name,
     configure_determinism,
+    create_model,
     get_device,
     infer_num_classes,
-    infer_num_node_features,
     init_mlflow,
     log_config,
     log_dataset_stats,
@@ -86,12 +85,14 @@ def run_training(cfg: DictConfig) -> float:
                 log_dataset_stats(loader, split, log_to_mlflow=True)
 
             device = get_device(cfg.training.device)
-            num_features = infer_num_node_features(train_loader)
             num_classes = infer_num_classes(train_loader)
-            model = build_model(
-                cfg.model, num_features, num_classes).to(device)
-            model = BatchEnrichedModel(
-                model, cfg.model, device).to(device)
+            sample_batch = next(iter(train_loader))
+            model = create_model(
+                model_fn=build_model,
+                model_cfg=cfg.model,
+                sample_batch=sample_batch,
+                num_classes=num_classes,
+                device=device)
             optimizer = torch.optim.Adam(
                 model.parameters(),
                 lr=cfg.training.lr,

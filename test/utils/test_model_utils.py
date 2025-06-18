@@ -5,7 +5,7 @@ from torch import nn
 from torch_geometric.data import Batch, Data
 
 from graph_transformer_benchmark.utils.model_utils import (
-    BatchEnrichedModel,
+    BatchEnrichmentWrapper,
     build_run_name,
     infer_task_and_loss,
 )
@@ -16,7 +16,7 @@ def test_batch_enriched_model_forwards_correctly(
         cfg_transformer,
         simple_graph
         ):
-    model = BatchEnrichedModel(dummy_model, cfg_transformer, device="cpu")
+    model = BatchEnrichmentWrapper(dummy_model, cfg_transformer, device="cpu")
     out = model(simple_graph)
     # DummyModel returns one-hot logits based on label value
     expected = torch.zeros((simple_graph.num_nodes, simple_graph.y.max() + 1))
