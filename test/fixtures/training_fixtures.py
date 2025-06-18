@@ -193,6 +193,7 @@ def base_training_config(tmp_path):
             "epochs": 3,
             "batch_size": 32,
             "lr": 0.001,
+            "weight_decay": 0.0001,
             "val_frequency": 1,
             "patience": 2,
             "device": "cpu",
