@@ -9,7 +9,7 @@ from .builders import (
 )
 from .factory import build_model
 from .node import NodeGNN
-from .transformer import NodeGraphTransformer, build_graph_transformer
+from .transformer import build_graph_transformer
 
 __all__ = [
     "BaseGNN",
@@ -18,6 +18,5 @@ __all__ = [
     "build_node_classifier",
     "build_gin_classifier",
     "build_graph_transformer",
-    "NodeGraphTransformer",
     "build_model",
 ]

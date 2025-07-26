@@ -4,17 +4,29 @@ from omegaconf import DictConfig, OmegaConf
 
 
 @pytest.fixture
-def cfg_transformer() -> DictConfig:
+def cfg_transformer() -> dict:
     """Minimal DictConfig for GraphTransformer builder."""
-    return OmegaConf.create({
-        "type": "GraphTransformer",
-        "hidden_dim": 8,
-        "num_layers": 2,
+
+    encode_cfg = {
+        "num_encoder_layers": 2,
         "num_heads": 2,
         "dropout": 0.0,
         "ffn_hidden_dim": None,
         "activation": "relu",
         "use_super_node": False,
+        "attn_bias_providers": (),
+        "positional_encoders": (),
+        "node_feature_encoder": None,
+    }
+    gnn_confg = {
+        "gnn_position": "pre",
+        "gnn_conv_type": None
+    }
+    return {
+        "type": "GraphTransformer",
+        "encoder_cfg": encode_cfg,
+        "gnn_cfg": gnn_confg,
+        "hidden_dim": 8,
         "with_spatial_bias": False,
         "with_edge_bias": False,
         "with_hop_bias": False,
@@ -22,14 +34,13 @@ def cfg_transformer() -> DictConfig:
         "with_eig_enc": False,
         "with_svd_enc": False,
         "gnn_conv_type": None,
-        "gnn_position": "pre",
         "max_degree": 0,
         "num_spatial": 0,
         "num_edges": 0,
         "num_hops": 0,
         "num_eigenc": 0,
         "num_svdenc": 0,
-    })
+    }
 
 
 @pytest.fixture

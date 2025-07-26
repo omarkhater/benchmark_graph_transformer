@@ -2,7 +2,6 @@
 Primary factory for instantiating GNN models.
 """
 import torch.nn as nn
-from omegaconf import DictConfig
 from torch_geometric.nn import GATConv, GCNConv, GINConv, SAGEConv
 
 from .builders import (
@@ -10,13 +9,13 @@ from .builders import (
     build_gnn_classifier,
     build_node_classifier,
 )
-from .transformer import NodeGraphTransformer, build_graph_transformer
+from .transformer import GraphLevelGraphTransformer, build_graph_transformer
 
 
 def build_model(
-    cfg: DictConfig,
+    cfg: dict,
     num_features: int,
-    num_classes: int,
+    out_channels: int,
 ) -> nn.Module:
     """
     Instantiate a GNN or GraphTransformer for either graph or node-level tasks.
@@ -26,41 +25,53 @@ def build_model(
       cfg.task: "graph" | "node"
       plus builder-specific hyperparams under cfg (hidden_dim, dropout, etc.)
     """
-    if not hasattr(cfg, "hidden_dim"):
-        object.__setattr__(cfg, "hidden_dim", num_features)
-    if not hasattr(cfg, "dropout"):
-        object.__setattr__(cfg, "dropout", 0.0)
-    if not hasattr(cfg, "use_batch_norm"):
-        object.__setattr__(cfg, "use_batch_norm", False)
-    if not hasattr(cfg, "use_residual"):
-        object.__setattr__(cfg, "use_residual", False)
+    necessary_keys = {
+        "hidden_dim": num_features,
+        "dropout": 0.0,
+        "use_batch_norm": False,
+        "use_residual": False
+    }
 
-    model_type = cfg.type.lower()
-    task = cfg.task.lower()
+    for key in necessary_keys:
+        if key not in cfg:
+            cfg.update({key: necessary_keys[key]})
+
+    allowed_model_types = {
+        "gcn", "sage", "gat", "gin", "graphtransformer"
+    }
+    if cfg.get("type") not in allowed_model_types:
+        raise ValueError(
+            f"Unsupported model type: {cfg.get('type')}. "
+            f"Allowed types: {allowed_model_types}"
+        )
+
+    allowed_tasks = {"graph", "node"}
+    if cfg.get("task") not in allowed_tasks:
+        raise ValueError(
+            f"Unsupported task type: {cfg.get('task')}. "
+            f"Allowed tasks: {allowed_tasks}"
+        )
+    model_type = cfg.get("type").lower()
+    task = cfg.get("task").lower()
     use_bn = bool(getattr(cfg, "use_batch_norm", False))
     use_res = bool(getattr(cfg, "use_residual",   False))
 
     if model_type == "graphtransformer":
         if task == "graph":
-            return build_graph_transformer(cfg, num_features, num_classes)
-        else:  # node-level
-            base = build_graph_transformer(cfg, num_features, num_classes)
-            ffn = cfg.ffn_hidden_dim or cfg.hidden_dim
-            return NodeGraphTransformer(
-                hidden_dim=cfg.hidden_dim,
-                num_encoder_layers=cfg.num_layers,
-                num_heads=cfg.num_heads,
-                dropout=cfg.dropout,
-                ffn_hidden_dim=ffn,
-                activation=cfg.activation,
-                attn_bias_providers=base.attn_bias_providers,
-                positional_encoders=base.positional_encoders,
-                use_super_node=cfg.use_super_node,
-                node_feature_encoder=base.node_feature_encoder,
-                gnn_block=base.gnn_block,
-                gnn_position=cfg.gnn_position,
-                num_node_classes=num_classes,
+            model = GraphLevelGraphTransformer(
+                hidden_dim=cfg.get("hidden_dim"),
+                encoder_cfg=cfg.get("encoder_cfg"),
+                gnn_cfg=cfg.get("gnn_cfg"),
+                out_channels=out_channels
             )
+            return model
+
+        model = build_graph_transformer(
+            cfg=cfg,
+            num_features=num_features,
+            out_channels=out_channels
+        )
+        return model
 
     conv_map = {"gcn": GCNConv, "sage": SAGEConv, "gat": GATConv}
     if model_type in conv_map:
@@ -71,8 +82,8 @@ def build_model(
         return builder(
             conv_map[model_type],
             num_features,
-            cfg.hidden_dim,
-            num_classes,
+            cfg.get("hidden_dim"),
+            out_channels,
             use_bn,
             use_res,
         )
@@ -80,7 +91,9 @@ def build_model(
     if model_type == "gin":
         if task == "graph":
             return build_gin_classifier(
-                num_features, cfg.hidden_dim, num_classes,
+                num_features,
+                cfg.get("hidden_dim"),
+                out_channels,
                 use_bn, use_res
             )
         else:
@@ -94,8 +107,8 @@ def build_model(
             return build_node_classifier(
                 gin_factory,
                 num_features,
-                cfg.hidden_dim,
-                num_classes,
+                cfg.get("hidden_dim"),
+                out_channels,
                 use_bn,
                 use_res,
             )

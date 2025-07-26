@@ -12,10 +12,8 @@ from torch_geometric.nn import GATConv, GCNConv, SAGEConv
 from src.graph_transformer_benchmark.graph_models import (
     BaseGNN,
     NodeGNN,
-    NodeGraphTransformer,
     build_gin_classifier,
     build_gnn_classifier,
-    build_graph_transformer,
     build_model,
     build_node_classifier,
 )
@@ -23,24 +21,35 @@ from src.graph_transformer_benchmark.graph_models import (
 
 def test_build_gnn_classifier_returns_base_gnn() -> None:
     model = build_gnn_classifier(
-        GCNConv, in_channels=3, hidden_dim=4, num_classes=2,
-        use_batch_norm=False, use_residual=False
+        GCNConv,
+        in_channels=3,
+        hidden_dim=4,
+        num_classes=2,
+        use_batch_norm=False,
+        use_residual=False
     )
     assert isinstance(model, BaseGNN)
 
 
 def test_build_node_classifier_returns_node_gnn() -> None:
     model = build_node_classifier(
-        SAGEConv, in_channels=3, hidden_dim=5, num_classes=3,
-        use_batch_norm=True, use_residual=True
+        SAGEConv,
+        in_channels=3,
+        hidden_dim=5,
+        num_classes=3,
+        use_batch_norm=True,
+        use_residual=True
     )
     assert isinstance(model, NodeGNN)
 
 
 def test_build_gin_classifier_returns_base_gnn() -> None:
     model = build_gin_classifier(
-        in_channels=3, hidden_dim=6, num_classes=4,
-        use_batch_norm=True, use_residual=False
+        in_channels=3,
+        hidden_dim=6,
+        num_classes=4,
+        use_batch_norm=True,
+        use_residual=False
     )
     assert isinstance(model, BaseGNN)
 
@@ -52,55 +61,18 @@ def test_graphtransformer_via_factory(
     Ensure factory builds GraphTransformer in graph mode correctly.
     """
     cfg = cfg_transformer.copy()
-    cfg.task = "graph"
-    feat_dim = simple_batch.x.size(1)
-    model = build_model(cfg, num_features=feat_dim, num_classes=2)
-    out = model(simple_batch)
-    assert out.shape == (2, 2)
-
-
-def test_node_graphtransformer_direct(
-    cfg_transformer, simple_graph
-) -> None:
-    """
-    Directly construct and run NodeGraphTransformer.
-    """
-    cfg = cfg_transformer.copy()
-    feat_dim = simple_graph.x.size(1)
-    base = build_graph_transformer(cfg, num_features=feat_dim, num_classes=3)
-    ffn_dim = cfg.ffn_hidden_dim or cfg.hidden_dim
-    ngt = NodeGraphTransformer(
-        hidden_dim=cfg.hidden_dim,
-        num_node_classes=3,
-        use_super_node=cfg.use_super_node,
-        node_feature_encoder=base.node_feature_encoder,
-        num_encoder_layers=cfg.num_layers,
-        num_heads=cfg.num_heads,
-        dropout=cfg.dropout,
-        ffn_hidden_dim=ffn_dim,
-        activation=cfg.activation,
-        attn_bias_providers=base.attn_bias_providers or [],
-        positional_encoders=base.positional_encoders or [],
-        gnn_block=base.gnn_block,
-        gnn_position=cfg.gnn_position,
+    cfg.update(
+        {
+            "type": "graphtransformer",
+            "task": "graph",
+        },
     )
-    out = ngt(simple_graph)
-    assert out.shape == (simple_graph.x.size(0), 3)
-
-
-def test_graphtransformer_node_mode_factory(
-    cfg_transformer, simple_graph
-) -> None:
-    """
-    Ensure factory builds NodeGraphTransformer via build_model.
-    """
-    cfg = cfg_transformer.copy()
-    cfg.task = "node"
-    cfg.type = "graphtransformer"
-    feat_dim = simple_graph.x.size(1)
-    model = build_model(cfg, num_features=feat_dim, num_classes=3)
-    out = model(simple_graph)
-    assert out.shape == (simple_graph.x.size(0), 3)
+    feat_dim = simple_batch.x.size(1)
+    out_channels = 2
+    num_graphs = simple_batch.y.size(0)
+    model = build_model(cfg, num_features=feat_dim, out_channels=out_channels)
+    out = model(simple_batch)
+    assert out.shape == (num_graphs, out_channels)
 
 
 def test_batchnorm_and_residual_flags() -> None:
@@ -136,7 +108,7 @@ def test_factory_graph_and_node_tasks(
             cfg2.task = task
             data = graph_batch if task == "graph" else next(iter(node_loader))
             feat_dim = data.x.size(1)
-            model = build_model(cfg2, num_features=feat_dim, num_classes=2)
+            model = build_model(cfg2, num_features=feat_dim, out_channels=2)
             if task == "graph":
                 out = model(graph_batch)
                 assert out.shape == (graph_batch.y.size(0), 2)
@@ -161,7 +133,7 @@ def test_generic_loader_support(
     model = build_model(
         cfg,
         num_features=next(iter(generic_loader)).x.size(1),
-        num_classes=num_cls,
+        out_channels=num_cls,
     )
     batch = next(iter(generic_loader))
     out = model(batch)
@@ -176,4 +148,4 @@ def test_invalid_config_raises(cfg_unsupported) -> None:
         cfg = cfg_unsupported.copy()
         cfg.type = "unknown"
         cfg.task = "graph"
-        build_model(cfg, num_features=1, num_classes=1)
+        build_model(cfg, num_features=1, out_channels=1)
