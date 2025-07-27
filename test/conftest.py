@@ -3,6 +3,11 @@
 This module re-exports all fixtures from their respective modules to provide
 a single import point for test fixtures.
 """
+import random
+
+import numpy as np
+import pytest
+import torch
 
 from .fixtures.config_fixtures import (
     cfg_data,
@@ -114,3 +119,17 @@ __all__ = [
     'disable_mlflow',
     'base_training_config'
 ]
+
+
+@pytest.fixture(autouse=True)
+def deterministic_seed():
+    """
+    Seeding before every single test run so that
+    torch.randn, torch.randint, torch.randperm, Python random, and numpy
+    all produce the exact same “random” draws each time.
+    """
+    seed = 42
+    torch.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    return seed
