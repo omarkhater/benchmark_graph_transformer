@@ -3,68 +3,124 @@ import pytest
 from omegaconf import DictConfig, OmegaConf
 
 
-@pytest.fixture
-def cfg_transformer() -> dict:
-    """Minimal DictConfig for GraphTransformer builder."""
-
-    encode_cfg = {
+@pytest.fixture(
+    params=[
+        pytest.param("minimal",      id="minimal"),
+        pytest.param("bias_only",    id="bias_only"),
+        pytest.param("pos_only",     id="positional_only"),
+        pytest.param("gnn_only",     id="gnn_only"),
+        pytest.param("all_features", id="all_features"),
+    ]
+)
+def cfg_transformer(request) -> dict:
+    """
+    Parametrized configs for GraphTransformer builder:
+      - minimal:    no bias, no positional‐encoders, no gnn
+      - bias_only:  only attention‐bias providers enabled
+      - pos_only:   only positional encoders enabled
+      - gnn_only:   only gnn hook enabled (uses GCNConv)
+      - all_features: all of the above
+    """
+    # base encoder config
+    encoder_cfg = {
         "num_encoder_layers": 2,
-        "num_heads": 2,
-        "dropout": 0.0,
+        "num_heads": 4,
         "ffn_hidden_dim": None,
         "activation": "relu",
         "use_super_node": False,
-        "attn_bias_providers": (),
-        "positional_encoders": (),
         "node_feature_encoder": None,
+        "dropout": 0.1,
+        # start all disabled
+        "bias": {
+            "spatial": {"enabled": False, "num_spatial": 4},
+            "edge":    {"enabled": False, "num_edges":   3},
+            "hop":     {"enabled": False, "num_hops":    2},
+        },
+        "positional": {
+            "degree": {"enabled": False, "max_degree":  3},
+            "eig":    {"enabled": False, "num_eigenc":  4},
+            "svd":    {"enabled": False, "num_svdenc":  3},
+        },
     }
-    gnn_confg = {
+
+    # base gnn config
+    gnn_cfg = {
         "gnn_position": "pre",
-        "gnn_conv_type": None
-    }
-    return {
-        "type": "GraphTransformer",
-        "encoder_cfg": encode_cfg,
-        "gnn_cfg": gnn_confg,
-        "hidden_dim": 8,
-        "with_spatial_bias": False,
-        "with_edge_bias": False,
-        "with_hop_bias": False,
-        "with_degree_enc": False,
-        "with_eig_enc": False,
-        "with_svd_enc": False,
         "gnn_conv_type": None,
-        "max_degree": 0,
-        "num_spatial": 0,
-        "num_edges": 0,
-        "num_hops": 0,
-        "num_eigenc": 0,
-        "num_svdenc": 0,
+    }
+
+    mode = request.param
+    if mode in ("bias_only", "all_features"):
+        for p in encoder_cfg["bias"].values():
+            p["enabled"] = True
+
+    if mode in ("pos_only", "all_features"):
+        for p in encoder_cfg["positional"].values():
+            p["enabled"] = True
+
+    if mode in ("gnn_only", "all_features"):
+        # flip on a real GNN block so we hit that codepath
+        gnn_cfg["gnn_conv_type"] = "gcn"
+        # leave gnn_position="pre" by default
+
+    return {
+        "type":        "GraphTransformer",
+        "hidden_dim":  16,
+        "cache_masks": False,
+        "cast_bias":   False,
+        "encoder_cfg": encoder_cfg,
+        "gnn_cfg":     gnn_cfg,
     }
 
 
 @pytest.fixture
-def cfg_graph() -> DictConfig:
-    """DictConfig for an OGB graph‐level dataset."""
-    return OmegaConf.create({"data": {"dataset": "ogbg-molhiv"}})
+def cfg_graph() -> dict[str, any]:
+    """
+    Base config for any graph‐level test.
+    Tests will override type, task, and objective.
+    """
+    return {
+        "hidden_dim": 8,
+        "use_batch_norm": False,
+        "use_residual": False,
+    }
 
 
 @pytest.fixture
-def cfg_node() -> DictConfig:
-    """DictConfig for an OGB node‐level dataset."""
-    return OmegaConf.create({"data": {"dataset": "ogbn-arxiv"}})
+def cfg_node() -> dict[str, any]:
+    """
+    Base config for any node‐level test.
+    Tests will override type, task, and objective.
+    """
+    return {
+        "hidden_dim": 8,
+        "use_batch_norm": False,
+        "use_residual": False,
+    }
 
 
 @pytest.fixture
-def cfg_generic() -> DictConfig:
-    """DictConfig for a generic graph dataset."""
-    return OmegaConf.create({"data": {"dataset": "MUTAG"}})
+def cfg_generic() -> dict[str, any]:
+    """
+    Minimal config for 'generic_loader' tests.
+    """
+    return {
+        "hidden_dim": 8,
+        "use_batch_norm": False,
+        "use_residual": False,
+    }
 
 
 @pytest.fixture
-def cfg_unsupported() -> DictConfig:
-    """DictConfig for an unsupported dataset name."""
-    return OmegaConf.create({"data": {"dataset": "unknown"}})
+def cfg_unsupported() -> dict[str, any]:
+    """
+    Minimal config for testing invalid‐type errors.
+    """
+    return {
+        "hidden_dim": 8,
+        "use_batch_norm": False,
+        "use_residual": False,
+    }
 
 
 @pytest.fixture
