@@ -10,22 +10,23 @@ from graph_transformer_benchmark.train import run_training
 
 @pytest.mark.slow
 @pytest.mark.integration
-@pytest.mark.parametrize("case_name", [
-    "node_binary",
-    "node_multiclass",
-    "graph_binary",
-    "graph_multiclass",
-    "edge_attr",
-    "sparse_features",
-    "masked_nodes",
-    "pyg_style",
-    "subset_with_parent"
+@pytest.mark.parametrize("case_name, task_type", [
+    ("node_binary", "node"),
+    ("node_multiclass", "node"),
+    ("graph_binary", "graph"),
+    ("graph_multiclass", "graph"),
+    ("edge_attr", "graph"),
+    ("sparse_features", "node"),
+    ("masked_nodes", "node"),
+    ("pyg_style", "node"),
+    ("subset_with_parent", "node")
 ])
 def test_classification_pipeline(
     monkeypatch,
     base_training_config,
     graph_classification_suite,
     case_name: str,
+    task_type: str
 ):
     """Test training pipeline with different classification scenarios.
 
@@ -37,7 +38,13 @@ def test_classification_pipeline(
     """
     loader = graph_classification_suite[case_name]
     dataloaders = (loader, loader, loader)
-
+    train_cfg = base_training_config.copy()
+    model_cfg = train_cfg.get("model", {})
+    model_cfg.update(
+        {
+            "task": task_type
+        }
+    )
     with monkeypatch.context() as m:
         # Mock the build_dataloaders function to return our test loaders
         m.setattr(
@@ -45,7 +52,7 @@ def test_classification_pipeline(
             lambda *args, **kwargs: dataloaders
         )
 
-        loss = run_training(base_training_config)
+        loss = run_training(train_cfg)
         print(f"Obtained loss: {loss:.4f}")
 
         assert isinstance(loss, float)

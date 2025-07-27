@@ -6,7 +6,6 @@ import numpy as np
 import torch
 from ogb.graphproppred import Evaluator as GraphEvaluator
 from ogb.nodeproppred import Evaluator as NodeEvaluator
-from omegaconf import DictConfig
 from torch import nn
 from torch.utils.data import DataLoader
 
@@ -26,7 +25,7 @@ def evaluate(
     model: nn.Module,
     loader: DataLoader,
     device: torch.device,
-    cfg: DictConfig,
+    cfg: dict,
 ) -> MetricDict:
     """Run a *single* forward-pass over ``loader`` and compute task-aware
     metrics.
@@ -53,9 +52,14 @@ def evaluate(
         :class:`torch_geometric.data.Data` or :class:`…Batch` objects.
     device
         The device on which inference is executed.
-    cfg
-        Hydra/OmegaConf configuration.  Only ``cfg.data.dataset`` is
-        accessed.
+    cfg: dict
+        Hydra configuration dictionary. It should contain the following keys:
+        - `model`: model configuration, including type and task.
+        - `data`: dataset configuration, including dataset name and split
+            parameters.
+        - `task`: task type, either "graph" or "node". This is used to
+            determine the model's task and is expected to match the model's
+            configuration.
 
     Returns
     -------
@@ -84,7 +88,7 @@ def evaluate(
     # 1. Task detection (cheap – only looks at first batch)
     # ------------------------------------------------------------------ #
     task = detect_task_type(loader)
-    dataset_name: str = str(cfg.data.dataset)
+    dataset_name: str = str(cfg.get("data", {}).get("dataset", "unknown"))
 
     # ------------------------------------------------------------------ #
     # 2. Single inference sweep

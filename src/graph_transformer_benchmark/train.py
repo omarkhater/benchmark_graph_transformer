@@ -12,7 +12,6 @@ import traceback
 
 import mlflow
 import torch
-from omegaconf import DictConfig
 
 from graph_transformer_benchmark.data import build_dataloaders
 from graph_transformer_benchmark.graph_models import build_model
@@ -33,7 +32,7 @@ from graph_transformer_benchmark.utils import (
 )
 
 
-def run_training(cfg: DictConfig) -> float:
+def run_training(cfg: dict) -> float:
     """Launch training for a single model/dataset pair.
 
     The function is designed to be called programmatically from a CLI front‑end
@@ -43,9 +42,16 @@ def run_training(cfg: DictConfig) -> float:
 
     Parameters
     ----------
-    cfg:
-        Hydra configuration node produced by
-        ``graph_transformer_benchmark/conf``.
+    cfg: dict
+        Hydra configuration dictionary. It should contain the following keys:
+        - `model`: model configuration, including type and task.
+        - `training`: training configuration, including device, seed, and
+            MLflow settings.
+        - `data`: dataset configuration, including dataset name and split
+            parameters.
+        - `task`: task type, either "graph" or "node". This is used to
+            determine the model's task and is expected to match the model's
+            configuration.
 
     Returns
     -------
@@ -53,24 +59,23 @@ def run_training(cfg: DictConfig) -> float:
         Best validation loss observed during training.
     """
     try:
-        set_seed(cfg.training.seed)
+        training_seed = cfg.get("training", {}).get("seed", 1)
+        set_seed(training_seed)
         global _GLOBAL_SEED
-        _GLOBAL_SEED = cfg.training.seed
+        _GLOBAL_SEED = training_seed
 
-        configure_determinism(cfg.training.seed, torch.cuda.is_available())
+        configure_determinism(training_seed, torch.cuda.is_available())
 
         init_mlflow(cfg)
-        run_name = getattr(cfg.training.mlflow, "run_name", None)
-        description = getattr(
-            cfg.training.mlflow, "description", None
-        )
+        mlflow_cfg = cfg.get("training", {}).get("mlflow", {})
+        run_name = mlflow_cfg.get("run_name", None)
+        description = mlflow_cfg.get("description", None)
         if run_name is None:
             run_name = build_run_name(cfg)
         with mlflow.start_run(run_name=run_name):
             mlflow.set_tag("mlflow.note.content", description)
             log_config(cfg)
-
-            generator = torch.Generator().manual_seed(cfg.training.seed)
+            generator = torch.Generator().manual_seed(training_seed)
             train_loader, val_loader, test_loader = build_dataloaders(
                 cfg,
                 generator=generator,
@@ -84,19 +89,20 @@ def run_training(cfg: DictConfig) -> float:
             ):
                 log_dataset_stats(loader, split, log_to_mlflow=True)
 
-            device = get_device(cfg.training.device)
+            device = get_device(cfg.get("training", {}).get("device", "cpu"))
             num_classes = infer_num_classes(train_loader)
             sample_batch = next(iter(train_loader))
             model = create_model(
                 model_fn=build_model,
-                model_cfg=cfg.model,
+                model_cfg=cfg.get("model", {}),
                 sample_batch=sample_batch,
                 num_classes=num_classes,
                 device=device)
             optimizer = torch.optim.Adam(
                 model.parameters(),
-                lr=cfg.training.lr,
-                weight_decay=cfg.training.weight_decay,
+                lr=cfg.get("training", {}).get("lr", 0.001),
+                weight_decay=cfg.get(
+                    "training", {}).get("weight_decay", 0.0001),
             )
 
             trainer = GraphTransformerTrainer(
@@ -107,9 +113,9 @@ def run_training(cfg: DictConfig) -> float:
                 test_loader=test_loader,
                 optimizer=optimizer,
                 device=device,
-                num_epochs=cfg.training.epochs,
-                val_frequency=cfg.training.val_frequency,
-                patience=cfg.training.patience,
+                num_epochs=cfg.get("training", {}).get("epochs", 1),
+                val_frequency=cfg.get("training", {}).get("val_frequency", 1),
+                patience=cfg.get("training", {}).get("patience", 1),
             )
 
             _, metrics = trainer.train()

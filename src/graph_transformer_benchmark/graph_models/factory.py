@@ -39,14 +39,14 @@ def build_model(
     allowed_model_types = {
         "gcn", "sage", "gat", "gin", "graphtransformer"
     }
-    if cfg.get("type") not in allowed_model_types:
+    if cfg.get("type") and cfg.get("type").lower() not in allowed_model_types:
         raise ValueError(
             f"Unsupported model type: {cfg.get('type')}. "
             f"Allowed types: {allowed_model_types}"
         )
 
     allowed_tasks = {"graph", "node"}
-    if cfg.get("task") not in allowed_tasks:
+    if cfg.get("task") and cfg.get("task").lower() not in allowed_tasks:
         raise ValueError(
             f"Unsupported task type: {cfg.get('task')}. "
             f"Allowed tasks: {allowed_tasks}"

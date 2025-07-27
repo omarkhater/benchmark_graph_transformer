@@ -6,7 +6,6 @@ from unittest.mock import MagicMock
 import mlflow
 import pytest
 import torch
-from omegaconf import OmegaConf
 from torch.nn import Module
 from torch.optim import SGD
 from torch_geometric.data import Data
@@ -154,18 +153,26 @@ def disable_mlflow(monkeypatch):
 
 
 @pytest.fixture
-def base_training_config(tmp_path):
+def base_training_config(tmp_path: str) -> dict:
     """Create base training configuration for tests."""
-    return OmegaConf.create({
+    return {
         "model": {
             "type": "graphtransformer",
             "task": "graph",
             "hidden_dim": 64,
-            "num_layers": 4,
-            "num_heads": 8,
-            "dropout": 0.1,
-            "ffn_hidden_dim": 128,
-            "activation": "relu",
+            "encoder_cfg": {
+                "num_encoder_layers": 4,
+                "num_heads": 8,
+                "dropout": 0.1,
+                "ffn_hidden_dim": 128,
+                "activation": "gelu",
+                "use_super_node": False,
+                "node_feature_encoder": None,
+            },
+            "gnn_cfg": {
+                "gnn_position": "pre",
+                "gnn_conv_type": "gcn",
+            },
 
             # Required bias config
             "with_spatial_bias": True,
@@ -210,4 +217,4 @@ def base_training_config(tmp_path):
             "task": "graph",
             "split_seed": 42
         }
-    })
+    }
