@@ -1,7 +1,7 @@
 import inspect
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Tuple
-
+from collections.abc import Mapping
 import torch.nn as nn
 from torch import Tensor
 from torch.nn import (
@@ -121,10 +121,12 @@ class TransformerBackbone(nn.Module):
         """
         return self.model(data)
 
-    def _validate_encoder_cfg(self, enc_cfg: Dict[str, Any]) -> None:
+    def _validate_encoder_cfg(self, enc_cfg: Mapping[str, Any]) -> None:
         """Validate the encoder configuration."""
-        if not isinstance(enc_cfg, dict):
-            raise ValueError("`encoder_cfg` must be a dictionary")
+        if not isinstance(enc_cfg, Mapping):
+            raise ValueError(
+                f"`encoder_cfg` must be a mapping. Passed: {type(enc_cfg)}"
+            )
 
         self._validate_dropout(enc_cfg.get("dropout"))
         self._validate_heads_and_supernode(enc_cfg)
@@ -171,18 +173,18 @@ class TransformerBackbone(nn.Module):
         """
         Generic section checker for `bias` or `positional`.
         """
-        self._assert_dict(name, cfg)
+        self._assert_mapping(name, cfg)
 
         for key, params in cfg.items():
             self._assert_in_schema(name, key, schema)
-            self._assert_dict(f"{name}.{key}", params)
+            self._assert_mapping(f"{name}.{key}", params)
             self._assert_bool(f"{name}.{key}.enabled", params.get("enabled"))
             if params["enabled"]:
                 self._assert_required(f"{name}.{key}", params, schema[key])
 
-    def _assert_dict(self, where: str, obj: Any) -> None:
-        if not isinstance(obj, dict):
-            raise TypeError(f"`{where}` must be a dict")
+    def _assert_mapping(self, where: str, obj: Mapping[str, Any]) -> None:
+        if not isinstance(obj, Mapping):
+            raise TypeError(f"`{where}` must be a mapping, got {type(obj)}")
 
     def _assert_in_schema(
         self,
@@ -210,10 +212,11 @@ class TransformerBackbone(nn.Module):
             rlist = ", ".join(missing)
             raise ValueError(f"`{where}` missing required keys: {rlist}")
 
-    def _validate_gnn_cfg(self, gnn_cfg: Dict[str, Any]) -> None:
+    def _validate_gnn_cfg(self, gnn_cfg: Mapping[str, Any]) -> None:
         """Validate the GNN configuration."""
-        if not isinstance(gnn_cfg, dict):
-            raise ValueError("`gnn_cfg` must be a dictionary")
+        if not isinstance(gnn_cfg, Mapping):
+            raise ValueError(
+                f"`gnn_cfg` must be a mapping. Passed: {type(gnn_cfg)}")
 
         conv = gnn_cfg.get("gnn_conv_type")
         supported_convs = {"gcn", "sage", "gat", "gin"}
