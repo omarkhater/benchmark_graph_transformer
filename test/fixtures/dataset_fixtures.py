@@ -9,7 +9,12 @@ import torch
 from ogb.graphproppred import PygGraphPropPredDataset
 from omegaconf import OmegaConf
 from torch_geometric.data import Data
-from torch_geometric.datasets import Planetoid, TUDataset
+from torch_geometric.datasets import ZINC, Planetoid, TUDataset
+from torch_geometric.loader import DataLoader
+from torch_geometric.utils import degree
+
+CACHE_ROOT = Path(__file__).parent.parent.parent / "data"
+CACHE_ROOT.mkdir(parents=True, exist_ok=True)
 
 
 @pytest.fixture(autouse=True)
@@ -150,3 +155,75 @@ def ogb_node_dataset():
     mock_ds.__getitem__.return_value = data
     mock_ds.__len__.return_value = 1
     return mock_ds, data, train_idx, valid_idx, test_idx
+
+
+@pytest.fixture
+def mutag_graph_dataloaders():
+    """Fixtures dataloaders for the MUTAG dataset.
+    It is a graph level dataset for binary classification."""
+
+    ds = TUDataset(root=str(CACHE_ROOT / "TUD"), name="MUTAG")
+    n = len(ds)
+    train = ds[: n // 2]
+    val = ds[n // 2: 3 * n // 4]
+    test = ds[3 * n // 4:]
+    return (
+        DataLoader(train, batch_size=32),
+        DataLoader(val, batch_size=32),
+        DataLoader(test, batch_size=32),
+    )
+
+
+@pytest.fixture
+def cora_node_dataloaders():
+    """Fixtures dataloaders for the Cora dataset.
+    It is a node-level dataset for multi-class classification.
+    """
+    ds = Planetoid(root=str(CACHE_ROOT / "Planetoid"), name="Cora")
+    data = ds[0]
+    return (
+        DataLoader([data], batch_size=1),
+        DataLoader([data], batch_size=1),
+        DataLoader([data], batch_size=1),
+    )
+
+
+@pytest.fixture
+def zinc_graph_regression_dataloaders():
+    """Fixtures dataloaders for the ZINC dataset.
+    It is a graph-level regression dataset.
+    """
+    ds = ZINC(root=str(CACHE_ROOT / "ZINC"), subset=True)
+    sub = ds[:100]
+    n = len(sub)
+    idx = torch.randperm(n)
+    train_idx, val_idx, test_idx = (
+        idx[: n // 2],
+        idx[n // 2: 3 * n // 4],
+        idx[3 * n // 4:],
+    )
+    train = [sub[i] for i in train_idx]
+    val = [sub[i] for i in val_idx]
+    test = [sub[i] for i in test_idx]
+    return (
+        DataLoader(train, batch_size=32),
+        DataLoader(val, batch_size=32),
+        DataLoader(test, batch_size=32),
+    )
+
+
+@pytest.fixture
+def cora_node_degree_regression_dataloaders():
+    """
+    Fixtures dataloaders for the Cora dataset with node degree as target.
+    It is a node-level regression dataset.
+    """
+    ds = Planetoid(root=str(CACHE_ROOT / "Planetoid"), name="Cora")
+    data = ds[0]
+    row, _ = data.edge_index
+    data.y = degree(row, data.num_nodes).float().unsqueeze(1)
+    return (
+        DataLoader([data], batch_size=1),
+        DataLoader([data], batch_size=1),
+        DataLoader([data], batch_size=1),
+    )

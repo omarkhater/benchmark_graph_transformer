@@ -73,7 +73,7 @@ def cfg_transformer(request) -> dict:
     }
 
 
-@pytest.fixture
+@pytest.fixture()
 def cfg_graph() -> dict[str, any]:
     """
     Base config for any graph‐level test.

@@ -44,10 +44,14 @@ from .fixtures.data_fixtures import (
 )
 from .fixtures.dataset_fixtures import (
     cleanup_all,
+    cora_node_dataloaders,
+    cora_node_degree_regression_dataloaders,
     dataset_info,
     generic_cfg_and_cls,
+    mutag_graph_dataloaders,
     ogb_graph_dataset,
     ogb_node_dataset,
+    zinc_graph_regression_dataloaders,
 )
 from .fixtures.model_fixtures import (
     DummyGraphClassifier,
@@ -103,6 +107,10 @@ __all__ = [
     'generic_cfg_and_cls',
     'ogb_graph_dataset',
     'ogb_node_dataset',
+    'mutag_graph_dataloaders',
+    'cora_node_dataloaders',
+    'zinc_graph_regression_dataloaders',
+    'cora_node_degree_regression_dataloaders',
 
     # Config fixtures
     'cfg_transformer',
