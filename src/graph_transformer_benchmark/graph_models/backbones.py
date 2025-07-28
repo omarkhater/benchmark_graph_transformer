@@ -1,6 +1,6 @@
 import inspect
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Tuple
 
 import torch.nn as nn
 from torch import Tensor
@@ -96,6 +96,8 @@ class TransformerBackbone(nn.Module):
         self.hidden_dim = hidden_dim
         enc_cfg = cfg.get("encoder_cfg", {})
         gnn_cfg = cfg.get("gnn_cfg", {})
+        self._validate_encoder_cfg(enc_cfg)
+        self._validate_gnn_cfg(gnn_cfg)
         encoder_cfg = self._make_encoder_cfg(enc_cfg)
         gnn_cfg = self._make_gnn_cfg(gnn_cfg)
         self.model = GraphTransformer(
@@ -118,6 +120,118 @@ class TransformerBackbone(nn.Module):
             Tensor: Node embeddings of shape [N, hidden_dim].
         """
         return self.model(data)
+
+    def _validate_encoder_cfg(self, enc_cfg: Dict[str, Any]) -> None:
+        """Validate the encoder configuration."""
+        if not isinstance(enc_cfg, dict):
+            raise ValueError("`encoder_cfg` must be a dictionary")
+
+        self._validate_dropout(enc_cfg.get("dropout"))
+        self._validate_heads_and_supernode(enc_cfg)
+        self._validate_section(
+            name="bias",
+            cfg=enc_cfg.get("bias", {}),
+            schema={
+                "spatial": ("num_spatial",),
+                "edge": ("num_edges",),
+                "hop":  ("num_hops",),
+            }
+        )
+        self._validate_section(
+            name="positional",
+            cfg=enc_cfg.get("positional", {}),
+            schema={
+                "degree": ("max_degree",),
+                "eig": ("num_eigvec",),
+                "svd": ("num_svdenc",),
+            }
+        )
+
+    def _validate_dropout(self, dropout: Any) -> None:
+        """Validate the dropout configuration."""
+        if not isinstance(dropout, float) or not (0.0 <= dropout < 1.0):
+            raise ValueError(
+                f"`dropout` must be a float in [0.0, 1.0). Passed: {dropout}"
+            )
+
+    def _validate_heads_and_supernode(self, enc_cfg: Dict[str, Any]) -> None:
+        h = enc_cfg.get("num_heads")
+        if not isinstance(h, int) or h <= 0:
+            raise ValueError(f"`num_heads` must be positive int, got {h!r}")
+        su = enc_cfg.get("use_super_node")
+        if not isinstance(su, bool):
+            raise TypeError(f"`use_super_node` must be bool, got {type(su)}")
+
+    def _validate_section(
+        self,
+        name: str,
+        cfg: Any,
+        schema: Dict[str, Tuple[str, ...]]
+    ) -> None:
+        """
+        Generic section checker for `bias` or `positional`.
+        """
+        self._assert_dict(name, cfg)
+
+        for key, params in cfg.items():
+            self._assert_in_schema(name, key, schema)
+            self._assert_dict(f"{name}.{key}", params)
+            self._assert_bool(f"{name}.{key}.enabled", params.get("enabled"))
+            if params["enabled"]:
+                self._assert_required(f"{name}.{key}", params, schema[key])
+
+    def _assert_dict(self, where: str, obj: Any) -> None:
+        if not isinstance(obj, dict):
+            raise TypeError(f"`{where}` must be a dict")
+
+    def _assert_in_schema(
+        self,
+        section: str,
+        key: str,
+        schema: Dict[str, Any]
+    ) -> None:
+        if key not in schema:
+            allowed = ", ".join(schema)
+            raise ValueError(
+                f"Unsupported {section} provider {key!r}; allowed: {allowed}")
+
+    def _assert_bool(self, where: str, val: Any) -> None:
+        if not isinstance(val, bool):
+            raise ValueError(f"`{where}` must be a bool")
+
+    def _assert_required(
+        self,
+        where: str,
+        params: Dict[str, Any],
+        required: Tuple[str, ...]
+    ) -> None:
+        missing = [r for r in required if r not in params]
+        if missing:
+            rlist = ", ".join(missing)
+            raise ValueError(f"`{where}` missing required keys: {rlist}")
+
+    def _validate_gnn_cfg(self, gnn_cfg: Dict[str, Any]) -> None:
+        """Validate the GNN configuration."""
+        if not isinstance(gnn_cfg, dict):
+            raise ValueError("`gnn_cfg` must be a dictionary")
+
+        conv = gnn_cfg.get("gnn_conv_type")
+        supported_convs = {"gcn", "sage", "gat", "gin"}
+        supported_gnn_positions = {"pre", "post", "parallel"}
+        if conv and conv.lower() not in supported_convs:
+            raise ValueError(
+                f"Unsupported GNN conv type: {conv}. "
+                f"Supported types: {supported_convs}"
+            )
+        if conv and gnn_cfg.get("gnn_position") is None:
+            raise ValueError(
+                "`gnn_position` must be specified when `gnn_conv_type` is set"
+            )
+        if gnn_cfg.get("gnn_position") not in supported_gnn_positions:
+            raise ValueError(
+                f"Unsupported `gnn_position`: {gnn_cfg['gnn_position']}. "
+                f"Supported positions: {supported_gnn_positions}"
+            )
 
     def _make_encoder_cfg(self, enc_cfg: Dict[str, Any]) -> Dict[str, Any]:
         """
