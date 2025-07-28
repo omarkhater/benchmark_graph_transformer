@@ -71,3 +71,8 @@ priority = "supplemental"
 name = "pyg_whl"
 url = "https://data.pyg.org/whl/torch-2.6.0+cu126.html"
 priority = "supplemental"
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:'torch_geometric.contrib' contains experimental code:UserWarning",
+]
