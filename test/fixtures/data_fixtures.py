@@ -9,6 +9,7 @@ import torch
 from torch.utils.data import Subset
 from torch_geometric.data import Batch, Data
 from torch_geometric.loader import DataLoader
+from torch_geometric.utils import degree
 
 
 def create_train_val_test_masks(
@@ -153,21 +154,40 @@ def graph_loader() -> DataLoader:
     return DataLoader([d0, d1], batch_size=2)
 
 
-@pytest.fixture
-def node_loader() -> DataLoader:
-    """Provide a DataLoader for a single graph with 4 nodes [0,1,0,1]."""
-    labels = torch.tensor([0, 1, 0, 1]).unsqueeze(1)
-    edge_index = torch.tensor(
-        [
-            [0, 1, 2, 3],
-            [1, 2, 3, 0]
-        ],  # here we connect 0→1,1→2,2→3,3→0
-        dtype=torch.long)
-    graph = Data(
-        x=torch.randn(4, 4),
-        y=labels,
-        edge_index=edge_index
-        )
+@pytest.fixture(params=[8, 16])
+def node_loader(request) -> DataLoader:
+    """
+    Provide a DataLoader for a single graph with `N` nodes
+    (where N comes from request.param).
+    """
+    feature_dim = 4
+    N = request.param
+    # simple binary labels alternating 0/1
+    labels = torch.arange(N, dtype=torch.long) % 2
+    labels = labels.unsqueeze(1)
+
+    # make a simple cycle graph: 0→1→2→…→(N-1)→0
+    idx = torch.arange(N, dtype=torch.long)
+    edge_index = torch.stack([idx, (idx + 1) % N], dim=0)
+
+    # random features, here we keep feature-dim=4
+    x = torch.randn(N, feature_dim)
+
+    graph = Data(x=x, y=labels, edge_index=edge_index)
+
+    # spatial_pos: dummy zero–distance matrix
+    graph.spatial_pos = torch.zeros((N, N), dtype=torch.long)
+    # ptr: single graph, so [0, N]
+    graph.ptr = torch.tensor([0, N], dtype=torch.long)
+    graph.hop_dist = torch.zeros((N, N), dtype=torch.long)
+
+    row, col = graph.edge_index
+    graph.out_degree = degree(row, N, dtype=torch.long)
+    graph.in_degree = degree(col, N, dtype=torch.long)
+
+    graph.eig_pos_emb = torch.zeros((N, feature_dim), dtype=torch.float)
+    graph.svd_pos_emb = torch.zeros((N, 2 * 3), dtype=torch.float)
+
     return DataLoader([graph], batch_size=1)
 
 
@@ -188,18 +208,40 @@ def generic_loader() -> DataLoader:
     return DataLoader([g0, g1], batch_size=2)
 
 
-@pytest.fixture
-def regression_loader() -> DataLoader:
-    """Provide DataLoader for regression task with float targets."""
-    # Create a small graph with float node labels
-    graph = Data(
-        x=torch.randn(4, 4),
-        y=torch.randn(4),  # float targets for regression
-        edge_index=torch.tensor(
-            [[0, 1, 2, 3], [1, 2, 3, 0]],
-            dtype=torch.long
-        )
-    )
+@pytest.fixture(params=[8, 16])
+def regression_loader(request) -> DataLoader:
+    """
+    Provide a DataLoader for node‐level regression on a single cycle graph
+    of size N (where N comes from request.param), with float targets.
+    """
+    N = request.param
+    feature_dim = 4
+
+    # float targets, one per node
+    y = torch.randn(N, 1, dtype=torch.float)
+
+    # cycle graph 0→1→…→(N-1)→0
+    idx = torch.arange(N, dtype=torch.long)
+    edge_index = torch.stack([idx, (idx + 1) % N], dim=0)
+
+    x = torch.randn(N, feature_dim, dtype=torch.float)
+    graph = Data(x=x, y=y, edge_index=edge_index)
+
+    # structural tensors for all features / biases / positional encoders
+    graph.spatial_pos = torch.zeros((N, N), dtype=torch.long)
+    graph.hop_dist = torch.zeros((N, N), dtype=torch.long)
+    graph.ptr = torch.tensor([0, N], dtype=torch.long)
+
+    # degrees for DegreeEncoder
+    row, col = graph.edge_index
+    graph.out_degree = degree(row, N, dtype=torch.long)
+    graph.in_degree = degree(col, N, dtype=torch.long)
+
+    # positional embeddings for EigEncoder & SVDEncoder
+    # match your cfg: num_eigvec=4, num_svdenc=3 → concatenated size=6
+    graph.eig_pos_emb = torch.zeros((N, 4), dtype=torch.float)
+    graph.svd_pos_emb = torch.zeros((N, 2 * 3), dtype=torch.float)
+
     return DataLoader([graph], batch_size=1)
 
 
@@ -311,7 +353,8 @@ def make_graph_dataset():
         if edge_attr_dim is not None:
             edge_attr = torch.randn(edge_index.size(1), edge_attr_dim)
 
-        return Data(x=x, edge_index=edge_index, edge_attr=edge_attr, y=y)
+        data = Data(x=x, edge_index=edge_index, edge_attr=edge_attr, y=y)
+        return data
 
     def _make_dataset(
         num_graphs: int = 4,
@@ -800,7 +843,7 @@ def graph_classification_suite(request) -> dict[str, DataLoader]:
     graph_multi_num_classes = config['multiclass_targets']
     graph_multi_loader = DataLoader(
         ClassificationDataset(graph_multi, graph_multi_num_classes),
-        batch_size=2
+        batch_size=2,
     )
     graph_multi_loader.expected_classes = graph_multi_num_classes
 

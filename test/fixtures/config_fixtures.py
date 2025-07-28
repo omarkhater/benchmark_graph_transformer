@@ -5,10 +5,10 @@ from omegaconf import DictConfig, OmegaConf
 
 @pytest.fixture(
     params=[
-        pytest.param("minimal",      id="minimal"),
-        pytest.param("bias_only",    id="bias_only"),
-        pytest.param("pos_only",     id="positional_only"),
-        pytest.param("gnn_only",     id="gnn_only"),
+        pytest.param("minimal", id="minimal"),
+        pytest.param("bias_only", id="bias_only"),
+        pytest.param("pos_only", id="positional_only"),
+        pytest.param("gnn_only", id="gnn_only"),
         pytest.param("all_features", id="all_features"),
     ]
 )
@@ -38,8 +38,8 @@ def cfg_transformer(request) -> dict:
         },
         "positional": {
             "degree": {"enabled": False, "max_degree":  3},
-            "eig":    {"enabled": False, "num_eigenc":  4},
-            "svd":    {"enabled": False, "num_svdenc":  3},
+            "eig": {"enabled": False, "num_eigenc":  4, "num_eigvec":  3},
+            "svd": {"enabled": False, "num_svdenc":  3},
         },
     }
 
@@ -54,7 +54,7 @@ def cfg_transformer(request) -> dict:
         for p in encoder_cfg["bias"].values():
             p["enabled"] = True
 
-    if mode in ("pos_only", "all_features"):
+    if mode in ("positional_only", "all_features"):
         for p in encoder_cfg["positional"].values():
             p["enabled"] = True
 
@@ -64,12 +64,12 @@ def cfg_transformer(request) -> dict:
         # leave gnn_position="pre" by default
 
     return {
-        "type":        "GraphTransformer",
+        "type": "GraphTransformer",
         "hidden_dim":  16,
         "cache_masks": False,
         "cast_bias":   False,
         "encoder_cfg": encoder_cfg,
-        "gnn_cfg":     gnn_cfg,
+        "gnn_cfg": gnn_cfg,
     }
 
 

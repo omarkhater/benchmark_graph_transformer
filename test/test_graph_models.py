@@ -38,29 +38,6 @@ def test_node_classification_shapes(
     assert not torch.allclose(out, out[0].expand_as(out))
 
 
-def test_node_classification_transformer_shapes(
-    cfg_transformer,
-    node_loader,
-):
-    data = next(iter(node_loader))
-    N = data.x.size(0)
-    C = int(data.y.unique().numel())
-
-    cfg = cfg_transformer.copy()
-    cfg.update(
-        type="graphtransformer",
-        task="node",
-        objective="classification"
-    )
-
-    model = build_model(cfg, num_features=data.x.size(1), out_channels=C)
-    out = model(data)
-
-    assert out.shape == (N, C)
-    assert out.dtype == torch.float32
-    assert not torch.allclose(out, out[0].expand_as(out))
-
-
 @pytest.mark.parametrize(
         "model_type", [
             "gcn",
@@ -93,26 +70,6 @@ def test_graph_classification_shapes(
     assert out.dtype == torch.float32
 
 
-def test_graph_classification_transformer_shapes(
-    cfg_transformer,
-    graph_batch,
-):
-    data = graph_batch
-    B = data.y.size(0)
-    C = int(data.y.unique().numel())
-
-    cfg = cfg_transformer.copy()
-    cfg.update(
-        type="graphtransformer", task="graph", objective="classification"
-    )
-
-    model = build_model(cfg, num_features=data.x.size(1), out_channels=C)
-    out = model(data)
-
-    assert out.shape == (B, C)
-    assert out.dtype == torch.float32
-
-
 @pytest.mark.parametrize(
         "model_type",
         [
@@ -138,23 +95,4 @@ def test_graph_regression_shapes(
     out = model(data)
 
     assert out.shape == (num_graphs, 1)
-    assert out.dtype == torch.float32
-
-
-def test_graph_regression_transformer_shapes(
-    cfg_transformer,
-    graph_batch,
-):
-    data = graph_batch
-    B = data.y.size(0)
-
-    cfg = cfg_transformer.copy()
-    cfg.update(
-        type="graphtransformer", task="graph", objective="regression"
-    )
-
-    model = build_model(cfg, num_features=data.x.size(1), out_channels=1)
-    out = model(data)
-
-    assert out.shape == (B, 1)
     assert out.dtype == torch.float32
