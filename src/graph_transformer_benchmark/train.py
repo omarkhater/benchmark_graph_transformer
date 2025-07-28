@@ -29,6 +29,10 @@ from graph_transformer_benchmark.utils import (
     log_dataset_stats,
     set_seed,
     worker_init_fn,
+    update_training_pipeline_config,
+)
+from graph_transformer_benchmark.evaluation import (
+    detect_task_type,
 )
 
 
@@ -81,7 +85,6 @@ def run_training(cfg: dict) -> float:
                 generator=generator,
                 worker_init_fn=worker_init_fn,
             )
-
             for split, loader in (
                 ("train", train_loader),
                 ("val", val_loader),
@@ -91,6 +94,8 @@ def run_training(cfg: dict) -> float:
 
             device = get_device(cfg.get("training", {}).get("device", "cpu"))
             num_classes = infer_num_classes(train_loader)
+            task = detect_task_type(train_loader)
+            update_training_pipeline_config(cfg, task)
             sample_batch = next(iter(train_loader))
             model = create_model(
                 model_fn=build_model,

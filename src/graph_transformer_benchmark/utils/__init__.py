@@ -1,5 +1,5 @@
 """Public re-exports for the utils sub-package."""
-from .config_utils import flatten_cfg
+from .config_utils import flatten_cfg, update_training_pipeline_config
 from .data_utils import (
     infer_num_classes,
     infer_num_node_features,
@@ -33,4 +33,5 @@ __all__ = [
     "BatchEnrichmentWrapper",
     "flatten_cfg",
     "create_model",
+    "update_training_pipeline_config",
 ]
