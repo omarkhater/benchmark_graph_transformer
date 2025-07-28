@@ -1,22 +1,31 @@
 defaults:
   - transformer
 
-with_spatial_bias: true
-num_spatial: 32
-with_hop_bias: true
-num_hops: 5
-with_edge_bias: true
-num_edges: 16
+encoder_cfg:
+  bias:
+    spatial:
+      enabled: true
+      num_spatial: 32
+    edge:
+      enabled: true
+      num_edges: 16
+    hop:
+      enabled: true
+      num_hops: 5
+  positional:
+    degree:
+      enabled: true
+      max_degree: 32
+    eig:
+      enabled: true
+      num_eigenc: 8
+    svd:
+      enabled: true
+      num_svdenc: 8
 
-with_degree_enc: true
-with_eig_enc: true
-with_svd_enc: true
-max_degree: 32
-num_eigencs: 8
-num_svdencs: 8
-
-gnn_conv_type: gcn
-gnn_position: post
+gnn_cfg:
+  gnn_conv_type: gcn
+  gnn_position: post
 
 task: graph
 type: GraphTransformer

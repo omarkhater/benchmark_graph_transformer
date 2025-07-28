@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 import torch
-from omegaconf import DictConfig
 from torch_geometric.data import Batch, Dataset
 from torch_geometric.utils import degree
 
@@ -85,23 +87,24 @@ def ensure_node_features(batch: Batch, feature_dim: int = 1) -> Batch:
     if batch.x is None:
         num_nodes = batch.num_nodes
         device = batch.edge_index.device
+        dtype = batch.edge_index.dtype
         # Create synthetic node features as ones
         batch.x = torch.ones(
             (num_nodes, feature_dim),
             device=device,
-            dtype=torch.float32
+            dtype=dtype
         )
     return batch
 
 
-def enrich_batch(batch: Batch, cfg: DictConfig) -> Batch:
+def enrich_batch(batch: Batch, cfg: Mapping[str, Any]) -> Batch:
     """
     Enrich the batch with additional features based on the
     configuration settings.
     ----------
     batch : Batch
         The input batch to be enriched.
-    cfg : DictConfig
+    cfg : Mapping[str, Any]
         The configuration settings that determine which
         features to add to the batch.
     Returns
@@ -132,33 +135,112 @@ def enrich_batch(batch: Batch, cfg: DictConfig) -> Batch:
     are created to ensure compatibility with GraphTransformer models.
     """
     # Ensure node features exist for model compatibility
+    encoder_cfg = cfg.get("encoder_cfg", {})
     batch = ensure_node_features(batch, feature_dim=1)
+
+    batch = _enrich_batch_for_positional_encoders(
+        batch,
+        encoder_cfg.get("positional", {})
+    )
+
+    batch = _enrich_batch_for_attention_biases(
+        batch,
+        encoder_cfg.get("bias", {})
+    )
+
+    return batch
+
+
+def _enrich_batch_for_positional_encoders(
+    batch: Batch,
+    positional_cfg: Mapping[str, Any]
+) -> Batch:
+    """
+    Add various positional encodings to the batch based on cfg.
+    ----------
+    batch : Batch
+        The input batch to be enriched.
+    positional_cfg : Mapping[str, Any]
+        The positional configuration dict.
+    Returns
+    -------
+    Batch
+        The batch with added positional attributes:
+        - out_degree, in_degree
+        - eig_pos_emb
+        - svd_pos_emb
+    """
+    num_nodes = batch.num_nodes
+    device = batch.x.device
+    dtype = batch.x.dtype
+
+    degree_cfg = positional_cfg.get("degree", {})
+    if degree_cfg.get("enabled", False):
+        row, col = batch.edge_index
+        batch.out_degree = degree(row, num_nodes, dtype=dtype)
+        batch.in_degree = degree(col, num_nodes, dtype=dtype)
+
+    eig_cfg = positional_cfg.get("eig", {})
+    if eig_cfg.get("enabled", False):
+        dim = int(eig_cfg.get("num_eigenc"))
+        batch.eig_pos_emb = torch.empty(
+            (num_nodes, dim), device=device, dtype=dtype
+        )
+    svd_cfg = positional_cfg.get("svd", {})
+    if svd_cfg.get("enabled", False):
+        r = int(svd_cfg.get("num_svdenc", 0))
+        batch.svd_pos_emb = torch.empty(
+            (num_nodes, 2 * r), device=device, dtype=dtype
+        )
+
+    return batch
+
+
+def _enrich_batch_for_attention_biases(
+    batch: Batch,
+    bias_cfg: Mapping[str, Any]
+) -> Batch:
+    """
+    Add attention bias distance matrices to the batch based on cfg.
+    ----------
+    batch : Batch
+        The input batch to be enriched.
+    bias_cfg : Mapping[str, Any]
+        The bias configuration dict.
+    Returns
+    -------
+    Batch
+        The batch with added bias attributes:
+        - spatial_pos
+        - edge_dist
+        - hop_dist
+    """
 
     num_nodes = batch.num_nodes
     device = batch.edge_index.device
-    dtype = batch.x.dtype
+    dtype = batch.edge_index.dtype
 
-    if getattr(cfg, "with_degree_enc", False):
-        row, col = batch.edge_index
-        batch.out_degree = degree(row, num_nodes, dtype=torch.long)
-        batch.in_degree = degree(col, num_nodes, dtype=torch.long)
+    spatial_cfg = bias_cfg.get("spatial", {})
+    if spatial_cfg.get("enabled", False):
+        batch.spatial_pos = make_square_matrix(num_nodes, device, dtype)
 
-    if getattr(cfg, "with_eig_enc", False):
-        dim = int(getattr(cfg, "num_eigenc", 0))
-        batch.eig_pos_emb = torch.empty(
-            (num_nodes, dim), device=device, dtype=dtype).normal_()
+    edge_cfg = bias_cfg.get("edge", {})
+    if edge_cfg.get("enabled", False):
+        batch.edge_dist = make_square_matrix(num_nodes, device, dtype)
 
-    if getattr(cfg, "with_svd_enc", False):
-        r = int(getattr(cfg, "num_svdenc", 0))
-        batch.svd_pos_emb = torch.empty(
-            (num_nodes, 2 * r), device=device, dtype=dtype).normal_()
-
-    bias_shape = (num_nodes, num_nodes)
-    if getattr(cfg, "with_spatial_bias", False):
-        batch.spatial_pos = torch.zeros(bias_shape, dtype=torch.long)
-    if getattr(cfg, "with_edge_bias", False):
-        batch.edge_dist = torch.zeros(bias_shape, dtype=torch.long)
-    if getattr(cfg, "with_hop_bias", False):
-        batch.hop_dist = torch.zeros(bias_shape, dtype=torch.long)
+    hop_cfg = bias_cfg.get("hop", {})
+    if hop_cfg.get("enabled", False):
+        batch.hop_dist = make_square_matrix(num_nodes, device, dtype)
 
     return batch
+
+
+def make_square_matrix(
+        size: int,
+        device: torch.device,
+        dtype: torch.dtype = torch.float32
+        ) -> torch.Tensor:
+    """
+    Create a square matrix of zeros with the given size.
+    """
+    return torch.zeros((size, size), dtype=dtype, device=device)

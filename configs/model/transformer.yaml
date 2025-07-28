@@ -3,6 +3,3 @@ defaults:
   - common
 
 type: GraphTransformer
-activation: gelu
-ffn_hidden_dim: null           # fallback to hidden_dim in code
-use_super_node: false

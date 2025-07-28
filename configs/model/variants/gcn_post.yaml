@@ -4,8 +4,9 @@ defaults:
 task: graph
 type: GraphTransformer
 
-gnn_conv_type: gcn
-gnn_position: post
+gnn_cfg:
+  gnn_conv_type: gcn
+  gnn_position: post
 
 training:
   mlflow:

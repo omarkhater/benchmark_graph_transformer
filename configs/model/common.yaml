@@ -1,22 +1,42 @@
 # configs/model/common.yaml
-hidden_dim: 64
-num_heads: 4
-num_layers: 4
-dropout: 0.1
+objective: classification
+hidden_dim: 128
 seed: 42
+# ── encoder_cfg ────────────────────────────────────────────────────────────
+encoder_cfg:
+  num_encoder_layers: 4
+  num_heads: 4
+  dropout: 0.1
+  ffn_hidden_dim: 256
+  activation: relu
+  use_super_node: false
 
-# GNN hook
-gnn_conv_type: null
-gnn_position: pre
+  # attention-bias providers
+  bias:
+    spatial:
+      enabled: false
+      num_spatial: 4
+    edge:
+      enabled: false
+      num_edges: 4
+    hop:
+      enabled: false
+      num_hops: 4
 
-# GraphTransformer flags
-max_degree: 0
-num_eigenc: 0
-num_svdenc: 0
-num_spatial: 0
-num_edges: 0
-num_hops: 0
+  # positional encoders
+  positional:
+    degree:
+      enabled: false
+      max_degree: 10
+    eig:
+      enabled: false
+      num_eigenc: 4
+      num_eigvec: 4
+    svd:
+      enabled: false
+      num_svdenc: 4
 
-# GCN‐only extras (for HPO)
-use_batch_norm: false
-use_residual: false
+# ── gnn_cfg ─────────────────────────────────────────────────────────────────
+gnn_cfg:
+  gnn_conv_type: gcn
+  gnn_position: pre
