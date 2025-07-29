@@ -11,17 +11,87 @@ from graph_transformer_benchmark.utils.model_utils import (
 )
 
 
-def test_batch_enriched_model_forwards_correctly(
-        dummy_model,
-        cfg_transformer,
-        simple_graph
-        ):
-    model = BatchEnrichmentWrapper(dummy_model, cfg_transformer, device="cpu")
-    out = model(simple_graph)
-    # DummyModel returns one-hot logits based on label value
-    expected = torch.zeros((simple_graph.num_nodes, simple_graph.y.max() + 1))
-    expected[torch.arange(simple_graph.num_nodes), 0] = 1.0
-    assert torch.allclose(out, expected)
+class TestBatchEnrichmentWrapper:
+    """Validate BatchEnrichmentWrapper on node/graph × cls/reg tasks."""
+
+    # ------------------------------ constants --------------------------------
+    _CFG_MODES = ["minimal", "bias_only", "positional_only",
+                  "gnn_only", "all_features"]
+
+    _NODE_CLASS_BATCHES = ["masked_node_batch", "cora_style_batch"]
+    _GRAPH_CLASS_BATCHES = ["graph_batch", "generic_batch"]
+    _NODE_REG_BATCHES = ["node_regression_batch"]
+    _GRAPH_REG_BATCHES = ["regression_none_x_batch"]
+
+    # ------------------------------ helpers ----------------------------------
+    @staticmethod
+    def _one_hot(labels: torch.Tensor, device) -> torch.Tensor:
+        labels = labels.view(-1)
+        k = int(labels.max().item()) + 1
+        logits = torch.zeros(labels.size(0), k, device=device)
+        logits[torch.arange(labels.size(0), device=device), labels] = 1.0
+        return logits
+
+    def _run_cls(
+        self, model_factory, cfg_transformer, data_batch: Batch, device
+    ):
+        """Run classification model and validate output."""
+        labels = data_batch.y.view(-1)
+        num_classes = int(labels.max().item()) + 1
+        model = model_factory(num_classes)
+        wrapper = BatchEnrichmentWrapper(model, cfg_transformer, device=device)
+
+        out = wrapper(data_batch)
+        expected = self._one_hot(labels, out.device)
+
+        assert out.shape == expected.shape
+        assert torch.allclose(out, expected)
+
+    def _run_reg(
+        self, model_factory, cfg_transformer, data_batch: Batch, device
+    ):
+        """Run regression model and validate output."""
+        y_true = data_batch.y.float()
+        if y_true.ndim == 1:
+            y_true = y_true.view(-1, 1)
+
+        model = model_factory(out_dim=y_true.size(1))
+        wrapper = BatchEnrichmentWrapper(model, cfg_transformer, device=device)
+
+        out = wrapper(data_batch)
+        assert out.shape == y_true.shape
+        assert torch.allclose(out, y_true)
+
+    # ------------------------------ tests ------------------------------------
+    @pytest.mark.parametrize("cfg_transformer", _CFG_MODES, indirect=True)
+    @pytest.mark.parametrize("data_batch", _NODE_CLASS_BATCHES, indirect=True)
+    def test_node_classification(
+        self, cfg_transformer, data_batch, device, node_classifier_model
+    ):
+        self._run_cls(node_classifier_model, cfg_transformer,
+                      data_batch, device)
+
+    @pytest.mark.parametrize("cfg_transformer", _CFG_MODES, indirect=True)
+    @pytest.mark.parametrize("data_batch", _GRAPH_CLASS_BATCHES, indirect=True)
+    def test_graph_classification(
+        self, cfg_transformer, data_batch, device, graph_classifier_model
+    ):
+        self._run_cls(graph_classifier_model, cfg_transformer,
+                      data_batch, device)
+
+    @pytest.mark.parametrize("cfg_transformer", _CFG_MODES, indirect=True)
+    @pytest.mark.parametrize("data_batch", _NODE_REG_BATCHES, indirect=True)
+    def test_node_regression(
+        self, cfg_transformer, data_batch, device, regressor_model
+    ):
+        self._run_reg(regressor_model, cfg_transformer, data_batch, device)
+
+    @pytest.mark.parametrize("cfg_transformer", _CFG_MODES, indirect=True)
+    @pytest.mark.parametrize("data_batch", _GRAPH_REG_BATCHES, indirect=True)
+    def test_graph_regression(
+        self, cfg_transformer, data_batch, device, regressor_model
+    ):
+        self._run_reg(regressor_model, cfg_transformer, data_batch, device)
 
 
 @pytest.mark.parametrize("config,expected_name", [

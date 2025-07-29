@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
-from torch_geometric.data import Data
+from torch_geometric.data import Batch
 
 from graph_transformer_benchmark.data import enrich_batch
 
@@ -16,7 +16,7 @@ TaskKind = Literal["multilabel", "multiclass", "regression"]
 def create_model(
     model_fn: callable,
     model_cfg: DictConfig,
-    sample_batch: Data,
+    sample_batch: Batch,
     num_classes: int,
     device: torch.device
 ) -> nn.Module:
@@ -49,7 +49,7 @@ class BatchEnrichmentWrapper(nn.Module):
         self.cfg = cfg
         self.device = device
 
-    def forward(self, batch: Data):
+    def forward(self, batch: Batch):
         """Forward pass with automatic batch enrichment."""
         batch = enrich_batch(batch, self.cfg)
         batch = batch.to(self.device)

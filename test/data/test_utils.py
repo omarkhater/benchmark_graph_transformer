@@ -39,12 +39,12 @@ class TestEnrichBatchFlags:
     ]
 
     _REQUESTED_BATCHES = [
-        "simple_batch",
         "graph_batch",
         "generic_batch",
         "masked_node_batch",
         "cora_style_batch",
-        "regression_none_x_batch"
+        "regression_none_x_batch",
+        "node_regression_batch"
     ]
 
     @pytest.mark.parametrize(
