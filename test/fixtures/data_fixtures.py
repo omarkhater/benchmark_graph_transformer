@@ -501,7 +501,7 @@ def graph_batch(simple_graph: Data) -> Batch:
 
 
 @pytest.fixture
-def masked_node_loader() -> DataLoader:
+def masked_node_loader(make_node_data) -> DataLoader:
     """Provides a DataLoader for a graph with train/val/test node masks.
 
     Creates a single graph with 100 nodes and adds boolean mask tensors
@@ -510,7 +510,7 @@ def masked_node_loader() -> DataLoader:
     Returns:
         DataLoader: Loader with batch_size=1 containing the masked graph
     """
-    data = make_node_data()(
+    data = make_node_data(
         num_nodes=100,
         in_features=8,
         num_targets=2,
@@ -526,7 +526,7 @@ def masked_node_loader() -> DataLoader:
 
 
 @pytest.fixture
-def cora_style_loader() -> DataLoader:
+def cora_style_loader(make_node_data) -> DataLoader:
     """Provides a DataLoader mimicking the Cora citation network structure.
 
     Creates a single graph with Cora-like dimensions:
@@ -538,7 +538,7 @@ def cora_style_loader() -> DataLoader:
     Returns:
         DataLoader: Loader with batch_size=1 containing the Cora-like graph
     """
-    data = make_node_data()(
+    data = make_node_data(
         num_nodes=2708,
         in_features=1433,
         num_targets=7,
@@ -992,3 +992,43 @@ def graph_regression_suite(request) -> dict[str, DataLoader]:
         'pyg_style': DataLoader(pyg_style_regression, batch_size=2),
         'subset_with_parent': DataLoader(subset_regression, batch_size=2)
     }
+
+
+@pytest.fixture
+def generic_batch(generic_loader: DataLoader):
+    """Turn the generic_loader into a single Batch."""
+    return next(iter(generic_loader))
+
+
+@pytest.fixture
+def masked_node_batch(masked_node_loader: DataLoader):
+    """Turn the masked_node_loader into a single Batch."""
+    return next(iter(masked_node_loader))
+
+
+@pytest.fixture
+def cora_style_batch(cora_style_loader: DataLoader):
+    """Turn the cora_style_loader into a single Batch."""
+    return next(iter(cora_style_loader))
+
+
+@pytest.fixture
+def regression_none_x_batch(regression_none_x_loader: DataLoader):
+    """Turn the regression_none_x_loader into a single Batch."""
+    return next(iter(regression_none_x_loader))
+
+
+@pytest.fixture
+def data_batch(request):
+    """
+    Fixture for providing a single batch of graph data.
+    This fixture is parameterized to allow different batch configurations
+    to be tested by specifying the fixture name in the test function.
+    """
+    batch = request.getfixturevalue(request.param)
+    if not isinstance(batch, Batch):
+        raise ValueError(
+            f"Fixture {request.param} must be a torch_geometric.data.Batch "
+            f"got {type(batch)}"
+        )
+    return batch

@@ -63,28 +63,33 @@ def split_from_masks(data) -> dict[str, torch.Tensor]:
 
 def ensure_node_features(batch: Batch, feature_dim: int = 1) -> Batch:
     """
-    Ensure that the batch has node features, creating synthetic ones if needed.
+    Ensure that the batch has node features.
+    If the batch does not have node features, create synthetic
+    features with the specified feature dimension.
 
     Parameters
     ----------
-    batch : Batch
-        The input batch that may have None node features.
-    feature_dim : int, default=1
-        The dimension of synthetic node features to create if x is None.
-
+    batch : torch_geometric.data.Batch
+        The input batch to be checked and potentially modified.
+    feature_dim : int, optional
+        The number of features per node. Default is 1.
     Returns
     -------
-    Batch
-        The batch with guaranteed node features.
-
-    Notes
-    -----
-    This function handles datasets like QM7b where node features (batch.x)
-    are None. It creates a tensor of ones as synthetic node features to allow
-    GraphTransformer models to function properly. The synthetic features have
-    the same device and dtype as the edge_index.
+    torch_geometric.data.Batch
+        The modified batch with guaranteed node features.
     """
-    if batch.x is None:
+    if not isinstance(batch, Batch):
+        raise TypeError(
+            f"Expected torch_geometric.data.Batch object, got {type(batch)}"
+            )
+
+    required_attrs = ["edge_index", "num_nodes"]
+    if not all(hasattr(batch, attr) for attr in required_attrs):
+        raise ValueError(
+            f"Batch is missing required attributes: {required_attrs}"
+            )
+
+    if getattr(batch, "x", None) is None:
         num_nodes = batch.num_nodes
         device = batch.edge_index.device
         dtype = batch.edge_index.dtype

@@ -33,13 +33,13 @@ def cfg_transformer(request) -> dict:
         # start all disabled
         "bias": {
             "spatial": {"enabled": False, "num_spatial": 4},
-            "edge":    {"enabled": False, "num_edges":   3},
-            "hop":     {"enabled": False, "num_hops":    2},
+            "edge": {"enabled": False, "num_edges": 3},
+            "hop": {"enabled": False, "num_hops": 2},
         },
         "positional": {
-            "degree": {"enabled": False, "max_degree":  3},
-            "eig": {"enabled": False, "num_eigenc":  4, "num_eigvec":  3},
-            "svd": {"enabled": False, "num_svdenc":  3},
+            "degree": {"enabled": False, "max_degree": 3},
+            "eig": {"enabled": False, "num_eigenc": 4, "num_eigvec": 3},
+            "svd": {"enabled": False, "num_svdenc": 3},
         },
     }
 
