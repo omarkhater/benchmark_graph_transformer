@@ -41,10 +41,11 @@ from .fixtures.data_fixtures import (
     node_loader,
     node_reg_multi_target,
     node_reg_single_target,
+    node_regression_batch,
+    node_regression_loader,
     regression_loader,
     regression_none_x_batch,
     regression_none_x_loader,
-    simple_batch,
     simple_graph,
 )
 from .fixtures.dataset_fixtures import (
@@ -59,11 +60,11 @@ from .fixtures.dataset_fixtures import (
     zinc_graph_regression_dataloaders,
 )
 from .fixtures.model_fixtures import (
-    DummyGraphClassifier,
-    DummyNodeClassifier,
-    DummyRegressor,
     dummy_model,
     ensure_model_has_parameter,
+    graph_classifier_model,
+    node_classifier_model,
+    regressor_model,
 )
 from .fixtures.training_fixtures import (
     base_training_config,
@@ -77,9 +78,9 @@ __all__ = [
     # Model fixtures
     'dummy_model',
     'ensure_model_has_parameter',
-    'DummyNodeClassifier',
-    'DummyGraphClassifier',
-    'DummyRegressor',
+    'node_classifier_model',
+    'graph_classifier_model',
+    'regressor_model',
 
     # Data fixtures
     'graph_loader',
@@ -92,7 +93,6 @@ __all__ = [
     'binary_node_data',
     'multiclass_node_data',
     'simple_graph',
-    'simple_batch',
     'graph_batch',
     'node_reg_single_target',
     'node_reg_multi_target',
@@ -110,6 +110,8 @@ __all__ = [
     'masked_node_batch',
     'cora_style_batch',
     'regression_none_x_batch',
+    'node_regression_loader',
+    'node_regression_batch',
 
     # Dataset fixtures
     'cleanup_all',

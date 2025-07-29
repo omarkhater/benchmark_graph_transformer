@@ -4,7 +4,6 @@ import torch
 from torch import Tensor
 from torch.nn import Module, Parameter
 from torch_geometric.data import Batch, Data
-from torch_geometric.loader import DataLoader
 
 
 class DummyModel(Module):
@@ -51,9 +50,13 @@ class DummyGraphClassifier(Module):
         self.num_classes = num_classes
 
     def forward(self, batch: Batch):
-        y = batch.y
+        y = batch.y.view(-1)
         if self.num_classes == 1:
-            return y.float().unsqueeze(1) if y.ndim == 1 else y.float()
+            return torch.ones(
+                (y.size(0), 1),
+                device=y.device,
+                dtype=torch.float
+            )
         logits = torch.zeros(y.size(0), self.num_classes, device=y.device)
         logits[torch.arange(y.size(0), device=y.device), y] = 1.0
         return logits
@@ -96,82 +99,45 @@ def ensure_model_has_parameter(dummy_model: DummyModel) -> None:
 
 
 @pytest.fixture
-def graph_loader() -> DataLoader:
-    """Provide a DataLoader for two graph‐level samples with float targets."""
-    d0 = Data(x=torch.randn(1, 4), y=torch.tensor([0.5], dtype=torch.float32))
-    d1 = Data(x=torch.randn(1, 4), y=torch.tensor([1.5], dtype=torch.float32))
-    return DataLoader([d0, d1], batch_size=2)
-
-
-@pytest.fixture
-def node_loader() -> DataLoader:
-    """Provide a DataLoader for a single graph with 4 nodes [0,1,0,1]."""
-
-    labels = torch.tensor([0, 1, 0, 1]).unsqueeze(1)
-    edge_index = torch.tensor(
-        [
-            [0, 1, 2, 3],   # "chain" or self‑loops, etc.
-            [1, 2, 3, 0]
-        ],  # here we connect 0→1,1→2,2→3,3→0
-        dtype=torch.long)
-    graph = Data(
-        x=torch.randn(4, 4),
-        y=labels,
-        edge_index=edge_index
-        )
-    return DataLoader([graph], batch_size=1)
-
-
-@pytest.fixture
-def generic_loader() -> DataLoader:
-    """Provide DataLoader for generic graph classification with 1D targets."""
-    # two singleton graphs, each with a self‑loop edge:
-    g0 = Data(
-        x=torch.randn(1, 4),
-        y=torch.tensor(0),
-        edge_index=torch.tensor([[0], [0]], dtype=torch.long),
-    )
-    g1 = Data(
-        x=torch.randn(1, 4),
-        y=torch.tensor(1),
-        edge_index=torch.tensor([[0], [0]], dtype=torch.long),
-    )
-    return DataLoader([g0, g1], batch_size=2)
-
-
-@pytest.fixture
-def regression_loader() -> DataLoader:
-    """Provide DataLoader for regression task with float targets."""
-    # Create a small graph with float node labels
-    graph = Data(
-        x=torch.randn(4, 4),
-        y=torch.randn(4),  # float targets for regression
-        edge_index=torch.tensor(
-            [[0, 1, 2, 3], [1, 2, 3, 0]],
-            dtype=torch.long
-        )
-    )
-    return DataLoader([graph], batch_size=1)
-
-
-@pytest.fixture
-def regression_none_x_loader() -> DataLoader:
-    """Provide DataLoader for regression datasets with None node features.
-
-    This fixture reproduces the structure found in some regression datasets
-    where batch.x is None but edge_index and regression targets exist.
-    This is needed to test edge cases in data enrichment functions.
-    """
-    # Create graph with None node features (like QM7b dataset)
-    graph = Data(
-        x=None,  # This is the key condition that causes issues
-        edge_index=torch.tensor([[0, 1], [1, 0]], dtype=torch.long),
-        y=torch.tensor([42.5])  # float regression target
-    )
-    return DataLoader([graph], batch_size=1)
-
-
-@pytest.fixture
 def device() -> torch.device:
     """Provide a CPU device for testing."""
     return torch.device("cpu")
+
+
+@pytest.fixture
+def node_classifier_model():
+    """Factory for DummyNodeClassifier.
+
+    It returns a callable that creates a new instance
+    with the specified number of classes at runtime.
+
+    """
+    def _make(num_classes: int) -> DummyNodeClassifier:
+        return DummyNodeClassifier(num_classes)
+    return _make
+
+
+@pytest.fixture
+def graph_classifier_model():
+    """Factory for DummyGraphClassifier.
+
+    It returns a callable that creates a new instance
+    with the specified number of classes at runtime.
+
+    """
+    def _make(num_classes: int) -> DummyGraphClassifier:
+        return DummyGraphClassifier(num_classes)
+    return _make
+
+
+@pytest.fixture
+def regressor_model():
+    """Factory for DummyRegressor.
+
+    It returns a callable that creates a new instance
+    with the specified output dimension at runtime.
+
+    """
+    def _make(out_dim: int = 1) -> DummyRegressor:
+        return DummyRegressor(out_dim)
+    return _make

@@ -490,11 +490,6 @@ def simple_graph() -> Data:
 
 
 @pytest.fixture
-def simple_batch(simple_graph: Data) -> Batch:
-    return Batch.from_data_list([simple_graph, simple_graph])
-
-
-@pytest.fixture
 def graph_batch(simple_graph: Data) -> Batch:
     """Batch of two identical graphs, for whole‐graph models."""
     return Batch.from_data_list([simple_graph, simple_graph])
@@ -1032,3 +1027,35 @@ def data_batch(request):
             f"got {type(batch)}"
         )
     return batch
+
+
+@pytest.fixture
+def node_regression_loader() -> DataLoader:
+    """
+    Provide a DataLoader for node‐level regression on a fixed-size graph.
+    This fixture creates a simple cycle graph with 4 nodes, each having
+    random float features and targets.
+    """
+    # fixed-size toy graph
+    N = 4
+    feature_dim = 4
+
+    # random node features and float targets
+    x = torch.randn(N, feature_dim, dtype=torch.float)
+    y = torch.randn(N, 1, dtype=torch.float)
+
+    # a simple 4‐node cycle: 0→1→2→3→0
+    edge_index = torch.tensor(
+        [[0, 1, 2, 3],
+         [1, 2, 3, 0]],
+        dtype=torch.long,
+    )
+
+    graph = Data(x=x, y=y, edge_index=edge_index)
+    return DataLoader([graph], batch_size=1)
+
+
+@pytest.fixture
+def node_regression_batch(node_regression_loader: DataLoader) -> Batch:
+    """Turn the single‐graph loader into a Batch."""
+    return next(iter(node_regression_loader))
