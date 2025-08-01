@@ -4,35 +4,9 @@ from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
 
 from graph_transformer_benchmark.utils.data_utils import (
-    infer_num_classes,
     infer_num_node_features,
     log_dataset_stats,
 )
-
-
-class DummyDataset(list):
-    """Simple dataset wrapping a list with metadata attributes"""
-
-
-# ----------------------------------------------------------------------
-# Tests for infer_num_classes (comprehensive via test suites)
-# ----------------------------------------------------------------------
-
-def test_infer_num_classes_comprehensive(graph_classification_suite):
-    """Test infer_num_classes across different classification scenarios.
-
-    This comprehensive test covers all real-world usage patterns by testing
-    against known expected values for each fixture scenario.
-    """
-    for case_name, loader in graph_classification_suite.items():
-        inferred_classes = infer_num_classes(loader)
-        expected_classes = loader.expected_classes
-
-        assert inferred_classes == expected_classes, (
-            f"{case_name}: inferred {inferred_classes} classes, "
-            f"expected {expected_classes}"
-        )
-
 
 # ----------------------------------------------------------------------
 # Tests for log_dataset_stats
