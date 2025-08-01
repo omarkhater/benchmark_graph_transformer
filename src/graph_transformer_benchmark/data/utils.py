@@ -92,12 +92,11 @@ def ensure_node_features(batch: Batch, feature_dim: int = 1) -> Batch:
     if getattr(batch, "x", None) is None:
         num_nodes = batch.num_nodes
         device = batch.edge_index.device
-        dtype = batch.edge_index.dtype
         # Create synthetic node features as ones
         batch.x = torch.ones(
             (num_nodes, feature_dim),
             device=device,
-            dtype=dtype
+            dtype=torch.get_default_dtype()
         )
     return batch
 
@@ -182,8 +181,8 @@ def _enrich_batch_for_positional_encoders(
     degree_cfg = positional_cfg.get("degree", {})
     if degree_cfg.get("enabled", False):
         row, col = batch.edge_index
-        batch.out_degree = degree(row, num_nodes, dtype=dtype)
-        batch.in_degree = degree(col, num_nodes, dtype=dtype)
+        batch.out_degree = degree(row, num_nodes, dtype=torch.long)
+        batch.in_degree = degree(col, num_nodes, dtype=torch.long)
 
     eig_cfg = positional_cfg.get("eig", {})
     if eig_cfg.get("enabled", False):
@@ -222,20 +221,19 @@ def _enrich_batch_for_attention_biases(
     """
 
     num_nodes = batch.num_nodes
-    device = batch.edge_index.device
-    dtype = batch.edge_index.dtype
+    device = batch.x.device
 
     spatial_cfg = bias_cfg.get("spatial", {})
     if spatial_cfg.get("enabled", False):
-        batch.spatial_pos = make_square_matrix(num_nodes, device, dtype)
+        batch.spatial_pos = make_square_matrix(num_nodes, device, torch.long)
 
     edge_cfg = bias_cfg.get("edge", {})
     if edge_cfg.get("enabled", False):
-        batch.edge_dist = make_square_matrix(num_nodes, device, dtype)
+        batch.edge_dist = make_square_matrix(num_nodes, device, torch.long)
 
     hop_cfg = bias_cfg.get("hop", {})
     if hop_cfg.get("enabled", False):
-        batch.hop_dist = make_square_matrix(num_nodes, device, dtype)
+        batch.hop_dist = make_square_matrix(num_nodes, device, torch.long)
 
     return batch
 
