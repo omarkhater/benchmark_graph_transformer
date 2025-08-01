@@ -13,6 +13,7 @@ from .model_utils import (
     build_run_name,
     create_model,
     infer_task_and_loss,
+    enrich_batch,
 )
 from .seed import configure_determinism, set_seed, worker_init_fn
 
@@ -34,4 +35,5 @@ __all__ = [
     "flatten_cfg",
     "create_model",
     "update_training_pipeline_config",
+    "enrich_batch",
 ]

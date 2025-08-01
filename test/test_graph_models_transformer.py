@@ -1,8 +1,8 @@
 import pytest
 import torch
 
-from src.graph_transformer_benchmark.graph_models.factory import build_model
-
+from src.graph_transformer_benchmark.graph_models import build_model
+from src.graph_transformer_benchmark.utils import enrich_batch
 MODES = ["minimal", "bias_only", "positional_only", "gnn_only", "all_features"]
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -48,9 +48,11 @@ class TestGraphTransformerModes:
         cfg.update(type="graphtransformer",
                    task="node",
                    objective="classification")
-        model = build_model(cfg,
-                            num_features=data.x.size(1),
-                            out_channels=C)
+        model = build_model(
+            cfg,
+            num_features=data.x.size(1),
+            out_channels=C
+        )
         out = model(data)
 
         assert out.shape == (N, C)
@@ -82,13 +84,18 @@ class TestGraphTransformerModes:
         Ensure graph classification models return correct shapes.
         """
         data = next(iter(graph_cls_loader))
+        # TODO: Instead of enriching, improve the fixtures to
+        # avoid testing 2 things at once.
+        data = enrich_batch(data, cfg_transformer)
         B = data.y.size(0)
         C = graph_cls_loader.expected_classes
 
         cfg = cfg_transformer.copy()
-        cfg.update(type="graphtransformer",
-                   task="graph",
-                   objective="classification")
+        cfg.update(
+            type="graphtransformer",
+            task="graph",
+            objective="classification"
+        )
         model = build_model(
             cfg,
             num_features=(0 if data.x is None else data.x.size(1)),
@@ -104,6 +111,9 @@ class TestGraphTransformerModes:
         Ensure graph regression models return correct shapes.
         """
         data = next(iter(graph_reg_loader))
+        # TODO: Instead of enriching, improve the fixtures to
+        # avoid testing 2 things at once.
+        data = enrich_batch(data, cfg_transformer)
         B = data.y.size(0)
 
         cfg = cfg_transformer.copy()
