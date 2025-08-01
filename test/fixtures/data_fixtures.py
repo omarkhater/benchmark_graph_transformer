@@ -60,7 +60,7 @@ def create_node_features(
         torch.Tensor: Node features
     """
     if sparse:
-        return torch.randint(0, in_features, (num_nodes,))
+        return torch.randint(0, in_features, (num_nodes, 1))
     return torch.randn(num_nodes, in_features)
 
 
