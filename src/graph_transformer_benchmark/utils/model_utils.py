@@ -7,10 +7,41 @@ import torch.nn as nn
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 from torch_geometric.data import Batch
+from torch import Tensor
 
 from graph_transformer_benchmark.data import enrich_batch
 
 TaskKind = Literal["multilabel", "multiclass", "regression"]
+
+
+def get_num_features(batch: Batch) -> int:
+    """Get the number of features in the batch.
+    If the batch has sparse features, treat them as category indices.
+    If the batch has dense features, return the number of features.
+
+    Args:
+        batch (Batch): The input batch.
+    Returns:
+        int: The number of features in the batch.
+    """
+    num_feat = getattr(batch, 'num_node_features', None)
+    if num_feat is not None:
+        return int(num_feat)
+    if batch.x is None:
+        return 0
+    # sparse features case: treat as category indices 0 ... C-1
+    if isinstance(batch.x, Tensor) and batch.x.dim() == 1:
+
+        max_idx = int(batch.x.max().item())
+        return max_idx + 1
+    # 2-D dense features
+    if isinstance(batch.x, Tensor) and batch.x.dim() == 2:
+        return batch.x.size(1)
+
+    raise ValueError(
+        f"Cannot infer feature dim from x of shape {tuple(batch.x.shape)} "
+        f"and type {type(batch.x)}"
+    )
 
 
 def create_model(
@@ -30,7 +61,7 @@ def create_model(
         device: Device to create model on
     """
     enriched = enrich_batch(sample_batch, model_cfg)
-    num_features = enriched.x.size(1) if enriched.x is not None else 0
+    num_features = get_num_features(enriched)
     base_model = model_fn(model_cfg, num_features, num_classes).to(device)
     return BatchEnrichmentWrapper(base_model, model_cfg, device)
 
