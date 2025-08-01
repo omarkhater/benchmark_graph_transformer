@@ -87,7 +87,7 @@ class TestGraphTransformerModes:
         # TODO: Instead of enriching, improve the fixtures to
         # avoid testing 2 things at once.
         data = enrich_batch(data, cfg_transformer)
-        B = data.y.size(0)
+        B = data.num_graphs
         C = graph_cls_loader.expected_classes
 
         cfg = cfg_transformer.copy()
@@ -114,7 +114,7 @@ class TestGraphTransformerModes:
         # TODO: Instead of enriching, improve the fixtures to
         # avoid testing 2 things at once.
         data = enrich_batch(data, cfg_transformer)
-        B = data.y.size(0)
+        B = data.num_graphs
 
         cfg = cfg_transformer.copy()
         cfg.update(type="graphtransformer",
