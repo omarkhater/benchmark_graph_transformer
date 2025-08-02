@@ -154,48 +154,27 @@ def disable_mlflow(monkeypatch):
 
 @pytest.fixture
 def base_training_config(tmp_path: str) -> dict:
-    """Create base training configuration for tests."""
-    return {
-        "model": {
-            "type": "graphtransformer",
-            "task": "graph",
-            "hidden_dim": 64,
-            "encoder_cfg": {
-                "num_encoder_layers": 4,
-                "num_heads": 8,
-                "dropout": 0.1,
-                "ffn_hidden_dim": 128,
-                "activation": "gelu",
-                "use_super_node": False,
-                "node_feature_encoder": None,
-            },
-            "gnn_cfg": {
-                "gnn_position": "pre",
-                "gnn_conv_type": "gcn",
-            },
+    """Create training pipeline configuration for tests. This should
+    mimic the structure of a Hydra config.
 
-            # Required bias config
-            "with_spatial_bias": True,
-            "num_spatial": 32,
-            "with_edge_bias": True,
-            "num_edges": 16,
-            "with_hop_bias": True,
-            "num_hops": 5,
+    It expects to provide a dictionary with the following keys
+    {
+    "training": {...},
+    "data": {...},
+    "model": {...},
+    }
 
-            # Required positional encoding config
-            "with_degree_enc": True,
-            "max_degree": 32,
-            "with_eig_enc": True,
-            "num_eigenc": 8,
-            "with_svd_enc": True,
-            "num_svdenc": 8,
+    Parameters
+    ----------
+    tmp_path : str
+        Temporary path for MLflow tracking URI.
 
-            # GNN integration config
-            "gnn_conv_type": "gcn",
-            "gnn_position": "post",
-            "use_super_node": False,
-        },
-        "training": {
+    Returns
+    -------
+    dict
+        A dictionary containing the training, data, and model settings.
+    """
+    training_settings = {
             "seed": 42,
             "epochs": 3,
             "batch_size": 32,
@@ -211,10 +190,30 @@ def base_training_config(tmp_path: str) -> dict:
                     "run_name": "pytest-run",
                     "description": "CI unit-test",
                 }
-        },
-        "data": {
-            "dataset": "test_dataset",
-            "task": "graph",
-            "split_seed": 42
         }
+    data_settings = {
+            "dataset": "test_dataset",
+            "root": str(tmp_path / "data"),
+            "batch_size": 32,
+            "num_workers": 0,
+            "val_ratio": 0.1,
+            "test_ratio": 0.1,
+            "use_subgraph_sampler": True,
+            "sampler": {
+                "type": "neighbor",
+                "num_neighbors": [10, 10],
+                "disjoint": True
+            }
+        }
+
+    model_settings = {
+        "type": "test_model",
+        "objective": "classification",
+        "seed": 42,
+        # other model hyperparameters are expected to be listed here
+    }
+    return {
+        "training": training_settings,
+        "data": data_settings,
+        "model": model_settings
     }
