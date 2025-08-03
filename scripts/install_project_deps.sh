@@ -45,6 +45,9 @@ mkdir -p "$PIP_CACHE_DIR" "$POETRY_CACHE_DIR"
 cd "$PROJECT_ROOT"
 
 echo "Installing project dependencies with Poetry at '$PROJECT_ROOT'..."
+# Since we are creating a conda environment, we can tell poetry to not
+# create a virtualenv
+export POETRY_VIRTUALENVS_CREATE=false
 poetry install -v
 
 echo

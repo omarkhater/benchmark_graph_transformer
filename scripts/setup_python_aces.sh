@@ -19,6 +19,8 @@ if ! type conda >/dev/null 2>&1; then
   exit 1
 fi
 eval "$(conda shell.bash hook)"
+# Ensure named envs are created in the project directory
+export CONDA_ENVS_PATH="$(pwd)"
 
 # ─── 2) Create & activate a Python 3.12 env ──────────────────────────────────
 # Get the environment name from the first argument or default to "benchmark_env"
@@ -28,20 +30,16 @@ if [[ -z "$ENV_NAME" ]]; then
   exit 1
 fi
 
-# Get the environment location from the second argument or default to current dir
-ENV_LOCATION=${2:-"$(pwd)"}
-# Construct the full path for the conda environment
-ENV_PATH="${ENV_LOCATION%/}/$ENV_NAME"
-
-if [ -d "$ENV_PATH" ]; then
-  echo "Environment at '$ENV_PATH' already exists. Activating..."
+# Create & activate a named conda environment
+if conda env list | grep -qE "^$ENV_NAME[[:space:]]"; then
+  echo "Environment '$ENV_NAME' already exists. Activating..."
 else
-  echo "Creating conda environment at '$ENV_PATH' with Python 3.12..."
-  conda create --prefix "$ENV_PATH" python=3.12 -y
+  echo "Creating named conda environment '$ENV_NAME' with Python 3.12..."
+  conda create --name "$ENV_NAME" python=3.12 -y
 fi
 
-echo "Activating conda environment at '$ENV_PATH'..."
-conda activate "$ENV_PATH"
+echo "Activating named conda environment '$ENV_NAME'..."
+conda activate "$ENV_NAME"
 
 # ─── 3) Upgrade pip & install Poetry ─────────────────────────────────────────
 echo "Upgrading pip and installing Poetry..."
@@ -53,5 +51,5 @@ echo "✅ Python: $(python --version)"
 echo "✅ Poetry: $(poetry --version)"
 
 echo
-echo "Environment '$ENV_NAME' has Python 3.12 and Poetry installed at '$ENV_LOCATION'."
+echo "Environment '$ENV_NAME' has Python 3.12 and Poetry installed."
 echo "✓ ${SCRIPT_NAME} completed successfully"
