@@ -45,7 +45,6 @@ mkdir -p "$PIP_CACHE_DIR" "$POETRY_CACHE_DIR"
 cd "$PROJECT_ROOT"
 
 echo "Installing project dependencies with Poetry at '$PROJECT_ROOT'..."
-poetry config virtualenvs.create false --local
 poetry install -v
 
 echo
