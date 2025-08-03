@@ -79,6 +79,7 @@ if [[ -f $PROJECT_DIR/scripts/test_download_fsspec.sh ]]; then
   chmod +x "$PROJECT_DIR/scripts/test_download_fsspec.sh"
   bash \
     "$PROJECT_DIR/scripts/test_download_fsspec.sh" \
+    "$env_name" \
     "$PWD/.test_data" \
     || echo "‼ Error running test_download_fsspec.sh"
   echo "######################"
