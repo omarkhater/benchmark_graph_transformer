@@ -17,7 +17,6 @@ ENV/
 [Ll]ib
 [Ll]ib64
 [Ll]ocal
-[Ss]cripts
 pyvenv.cfg
 .python-version
 
