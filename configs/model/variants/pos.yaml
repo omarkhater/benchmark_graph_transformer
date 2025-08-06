@@ -1,18 +1,33 @@
 defaults:
   - transformer
 
-with_degree_enc: true
-with_eig_enc: true
-with_svd_enc: true
-max_degree: 32
-num_eigencs: 8
-num_svdencs: 8
+encoder_cfg:
+  bias:
+    spatial:
+      enabled: false
+      num_spatial: 32
+    edge:
+      enabled: false
+      num_edges: 16
+    hop:
+      enabled: false
+      num_hops: 5
+
+  positional:
+    degree:
+      enabled: true
+      max_degree: 32
+    eig:
+      enabled: true
+      num_eigenc: 8
+    svd:
+      enabled: true
+      num_svdenc: 8
 task: graph
 type: GraphTransformer
 training:
   mlflow:
     run_name: GraphTransformer-PositionalEncoding
     description: |
-      GraphTransformer with positional encoding.
-      The model is trained on the graph task with GNN convolution type as GCN.
-      The position of GNN is set to pre.
+      GraphTransformer with all positional encodings enabled. This includes
+      degree, eigendecomposition, and SVD encodings.

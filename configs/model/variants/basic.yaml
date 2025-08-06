@@ -9,4 +9,5 @@ training:
   mlflow:
     run_name: GraphTransformer-Basic
     description: |
-      GraphTransformer with basic settings.
+      GraphTransformer with basic settings. This means no positional encodings
+      or bias proviers. Also, no GNN hooks are used.

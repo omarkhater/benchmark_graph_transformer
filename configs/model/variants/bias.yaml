@@ -17,13 +17,13 @@ encoder_cfg:
 
   positional:
     degree:
-      enabled: true
+      enabled: false
       max_degree: 32
     eig:
-      enabled: true
+      enabled: false
       num_eigenc: 8
     svd:
-      enabled: true
+      enabled: false
       num_svdenc: 8
 
 task: graph
@@ -34,5 +34,3 @@ training:
     run_name: GraphTransformer-Bias
     description: |
       GraphTransformer with spatial bias, hop bias, and edge bias.
-      The model is trained on the graph task with GNN convolution type as GCN.
-      The position of GNN is set to pre.
