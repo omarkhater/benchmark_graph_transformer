@@ -45,3 +45,6 @@ summary_commands.sh
 .github/coding-instructions.md
 .github/test-instructions.md
 /.github/prompts
+datasets_summary.md
+run_benchmarks_linux.sh
+run_benchmarks_local.sh
