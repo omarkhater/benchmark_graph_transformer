@@ -2,17 +2,16 @@
 defaults:
   - transformer
 
-# turn on all three bias providers
 encoder_cfg:
   bias:
     spatial:
       enabled: true
       num_spatial: 32
     edge:
-      enabled: true
+      enabled: false
       num_edges: 16
     hop:
-      enabled: true
+      enabled: false
       num_hops: 5
 
 task: graph
@@ -20,6 +19,6 @@ type: GraphTransformer
 
 training:
   mlflow:
-    run_name: GraphTransformer-Bias
+    run_name: GraphTransformer-Bias-Spatial
     description: |
-      GraphTransformer with spatial bias, hop bias, and edge bias.
+      GraphTransformer with spatial bias enabled.
