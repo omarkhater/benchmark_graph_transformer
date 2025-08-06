@@ -38,5 +38,5 @@ encoder_cfg:
 
 # ── gnn_cfg ─────────────────────────────────────────────────────────────────
 gnn_cfg:
-  gnn_conv_type: gcn
+  gnn_conv_type: null
   gnn_position: pre
