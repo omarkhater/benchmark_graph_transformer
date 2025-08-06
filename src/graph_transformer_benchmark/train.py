@@ -18,6 +18,7 @@ from graph_transformer_benchmark.graph_models import build_model
 from graph_transformer_benchmark.training.graph_transformer_trainer import (
     GraphTransformerTrainer,
 )
+from torch_geometric.loader import DataLoader
 from graph_transformer_benchmark.utils import (
     build_run_name,
     configure_determinism,
@@ -30,10 +31,55 @@ from graph_transformer_benchmark.utils import (
     set_seed,
     worker_init_fn,
     update_training_pipeline_config,
-)
+    compute_max_degree,)
 from graph_transformer_benchmark.evaluation import (
     detect_task_type,
 )
+
+
+def update_max_degree(
+        cfg: dict,
+        data_loader: DataLoader,
+        safety_buffer: int = 5
+        ) -> None:
+    """Update the max_degree in the configuration based on the training data.
+
+    This function modifies the `degree_cfg` in the configuration to ensure that
+    the `max_degree` is set to a value that is safe for training, based on
+    the actual maximum degree observed in the training data. It adds a small
+    buffer to the observed maximum degree to avoid CUDA device-side assert
+    errors.
+
+    Parameters
+    ----------
+    cfg : dict
+        The configuration dictionary containing the model and encoder settings.
+    data_loader : DataLoader
+        The DataLoader containing the training data.
+    safety_buffer : int, optional
+        A small buffer to add to the observed maximum degree to ensure safety.
+        Default is 5.
+
+    Returns
+    -------
+    None
+        The function modifies the `cfg` dictionary in place.
+    """
+    degree_cfg = cfg.get(
+        "model", {}
+        ).get(
+            "encoder_cfg", {}
+        ).get(
+            "positional", {}
+        ).get("degree", {})
+    if degree_cfg.get("enabled", False):
+        actual_max_degree = compute_max_degree(data_loader)
+        degree_cfg["max_degree"] = actual_max_degree + safety_buffer
+        logging.info(
+            f"Updated max_degree to {degree_cfg['max_degree']} "
+            f"based on training data. "
+            f"Value set was {degree_cfg.get('max_degree', 'unknown')}"
+        )
 
 
 def run_training(cfg: dict) -> float:
@@ -96,10 +142,13 @@ def run_training(cfg: dict) -> float:
             num_classes = infer_num_classes(train_loader)
             task = detect_task_type(train_loader)
             update_training_pipeline_config(cfg, task)
+
+            model_cfg = cfg.get("model", {})
+            update_max_degree(cfg, train_loader)
             sample_batch = next(iter(train_loader))
             model = create_model(
                 model_fn=build_model,
-                model_cfg=cfg.get("model", {}),
+                model_cfg=model_cfg,
                 sample_batch=sample_batch,
                 num_classes=num_classes,
                 device=device)

@@ -1,6 +1,7 @@
 """Public re-exports for the utils sub-package."""
 from .config_utils import flatten_cfg, update_training_pipeline_config
 from .data_utils import (
+    compute_max_degree,
     infer_num_classes,
     infer_num_node_features,
     log_dataset_stats,
@@ -12,8 +13,8 @@ from .model_utils import (
     TaskKind,
     build_run_name,
     create_model,
-    infer_task_and_loss,
     enrich_batch,
+    infer_task_and_loss,
 )
 from .seed import configure_determinism, set_seed, worker_init_fn
 
@@ -36,4 +37,5 @@ __all__ = [
     "create_model",
     "update_training_pipeline_config",
     "enrich_batch",
+    "compute_max_degree",
 ]
