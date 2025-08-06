@@ -90,6 +90,8 @@ graph-transformer-benchmark/
 
 ## 🔧 Installation
 
+For ACES cluster instructions, see section ACES information below
+
 1. Install Poetry:
 ```bash
 # Windows (PowerShell)
@@ -122,6 +124,74 @@ source .venv/bin/activate
 5. Install dependencies:
 ```bash
 poetry install
+```
+
+### ACES Specific Instructions
+
+#### Python setup
+Since disk quotas are limited and there is no admin access on ACES, create a
+dedicated Python environment in a custom location. To automate this setup,
+use:
+
+```powershell
+bash scripts/setup_python_aces.sh [ENV_NAME] [ENV_LOCATION]
+```
+
+This script:
+- Creates or activates a Conda environment with Python 3.12
+- Installs Poetry in the activated environment
+
+#### Proxy configuration
+By default, ACES blocks outbound HTTP/HTTPS traffic. Configure the proxy for
+PyG and other clients with:
+
+```bash
+bash scripts/setup_web_proxy.sh
+```
+
+This script:
+- Loads the WebProxy module (if available)
+- Exports standard proxy environment variables
+- Configures fsspec to trust the environment proxy settings
+
+#### Install project dependencies
+After activating your Conda environment and configuring the proxy, install
+project dependencies via Poetry:
+
+```bash
+bash scripts/install_project_deps.sh [ENV_NAME] [PROJECT_ROOT]
+```
+
+This script:
+- Activates the specified Conda environment
+- Configures local Poetry cache directories
+- Runs `poetry install` in the project root
+
+#### Quickstart end-to-end
+To run the full ACES setup (env, proxy, deps, and download tests) in one step,
+use:
+
+```bash
+bash scripts/quick_start_aces.sh [ENV_NAME]
+```
+
+This will:
+1. Set up the Python 3.12 environment with Poetry
+2. Configure the proxy
+3. Install project dependencies
+4. Test downloading with `requests` and `fsspec`
+
+If you see something like below, then the setup is successful.
+
+```sh
+Done!
+✓ Cora OK  – 1 graph(s) downloaded to ...
+```
+
+You can then proceed with running the tests simply by
+
+```sh
+poetry run pytest
 ```
 
 ## ⚙️ Configuration
