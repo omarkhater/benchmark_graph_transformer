@@ -19,7 +19,10 @@ def test_is_node_level_graph(one_graph_dataset):
 
 class TestEnrichBatchFlags:
     # ── shared constants ────────────────────────────────────────────
-    _POS_ATTRS = ["in_degree", "out_degree", "eig_pos_emb", "svd_pos_emb"]
+    _POS_ATTRS = [
+        "in_degree",
+        "out_degree",
+    ]
     _BIAS_ATTRS = ["spatial_pos", "edge_dist", "hop_dist"]
 
     _POS_MODE_PARAMS = [
