@@ -12,28 +12,29 @@ import traceback
 
 import mlflow
 import torch
+from torch_geometric.loader import DataLoader
 
 from graph_transformer_benchmark.data import build_dataloaders
+from graph_transformer_benchmark.evaluation import (
+    detect_task_type,
+)
 from graph_transformer_benchmark.graph_models import build_model
 from graph_transformer_benchmark.training.graph_transformer_trainer import (
     GraphTransformerTrainer,
 )
-from torch_geometric.loader import DataLoader
 from graph_transformer_benchmark.utils import (
     build_run_name,
+    compute_max_degree,
     configure_determinism,
     create_model,
     get_device,
-    infer_num_classes,
+    infer_num_targets,
     init_mlflow,
     log_config,
     log_dataset_stats,
     set_seed,
-    worker_init_fn,
     update_training_pipeline_config,
-    compute_max_degree,)
-from graph_transformer_benchmark.evaluation import (
-    detect_task_type,
+    worker_init_fn,
 )
 
 
@@ -139,10 +140,10 @@ def run_training(cfg: dict) -> float:
                 log_dataset_stats(loader, split, log_to_mlflow=True)
 
             device = get_device(cfg.get("training", {}).get("device", "cpu"))
-            num_classes = infer_num_classes(train_loader)
             task = detect_task_type(train_loader)
             update_training_pipeline_config(cfg, task)
-
+            num_classes = infer_num_targets(train_loader, task)
+            logging.info(f"Detected task: {task}, num_classes: {num_classes}")
             model_cfg = cfg.get("model", {})
             update_max_degree(cfg, train_loader)
             sample_batch = next(iter(train_loader))
@@ -152,6 +153,7 @@ def run_training(cfg: dict) -> float:
                 sample_batch=sample_batch,
                 num_classes=num_classes,
                 device=device)
+            logging.info(f"Model created: {model}")
             optimizer = torch.optim.Adam(
                 model.parameters(),
                 lr=cfg.get("training", {}).get("lr", 0.001),

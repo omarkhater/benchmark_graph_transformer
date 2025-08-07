@@ -37,8 +37,7 @@ class GraphModel(nn.Module):
                          if use_residual else None)
         self.pool = (global_mean_pool if task == "graph"
                      else (lambda x, b: x))
-        head_dim = out_channels if objective == "classification" else 1
-        self.head = nn.Linear(backbone.hidden_dim, head_dim)
+        self.head = nn.Linear(backbone.hidden_dim, out_channels)
 
     def forward(self, data: Data) -> Tensor:
         """

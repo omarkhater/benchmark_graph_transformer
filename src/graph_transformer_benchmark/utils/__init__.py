@@ -4,6 +4,7 @@ from .data_utils import (
     compute_max_degree,
     infer_num_classes,
     infer_num_node_features,
+    infer_num_targets,
     log_dataset_stats,
 )
 from .device import get_device
@@ -28,6 +29,7 @@ __all__ = [
     "log_dataset_stats",
     "infer_num_node_features",
     "infer_num_classes",
+    "infer_num_targets",
     "infer_task_and_loss",
     "TaskKind",
     "build_run_name",

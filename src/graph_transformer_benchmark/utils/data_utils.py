@@ -9,11 +9,13 @@ import mlflow
 import torch
 from torch_geometric.loader import DataLoader
 from torch_geometric.utils import degree
+from graph_transformer_benchmark.evaluation.types import TaskType
 
 __all__ = [
     "log_dataset_stats",
     "infer_num_node_features",
     "infer_num_classes",
+    "infer_num_targets",
     "compute_max_degree",
     ]
 
@@ -126,6 +128,34 @@ def infer_num_classes(loader: DataLoader) -> int:
     labels = batch.y
     return int(
         labels.size(-1) if labels.dim() > 1 else labels.max().item() + 1)
+
+
+def infer_num_targets(loader: DataLoader, task_type) -> int:
+    """Return the number of output targets for classification and regression.
+
+    For classification tasks, this returns the number of classes.
+    For regression tasks, this returns the number of output targets.
+
+    Parameters
+    ----------
+    loader : DataLoader
+        DataLoader to inspect for target information
+    task_type : TaskType
+        The detected task type (classification or regression)
+
+    Returns
+    -------
+    int
+        Number of output targets/classes
+    """
+    batch = next(iter(loader))
+    labels = batch.y
+
+    # For regression tasks, return the number of output dimensions
+    if task_type in (TaskType.GRAPH_REGRESSION, TaskType.NODE_REGRESSION):
+        return int(labels.size(-1) if labels.dim() > 1 else 1)
+    # For classification tasks, return the number of classes
+    return infer_num_classes(loader)
 
 
 def compute_max_degree(loader: DataLoader) -> int:
