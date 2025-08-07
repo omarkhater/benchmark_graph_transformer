@@ -52,7 +52,7 @@ def configure_determinism(seed: int, cuda: bool) -> None:
     np.random.seed(seed)
     random.seed(seed)
 
-    torch.use_deterministic_algorithms(True, warn_only=True)
+    torch.use_deterministic_algorithms(True, warn_only=False)
 
     if cuda and _BACKENDS_SET["cudnn"]:
         torch.cuda.manual_seed_all(seed)
