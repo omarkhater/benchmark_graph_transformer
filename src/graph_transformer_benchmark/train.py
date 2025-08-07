@@ -153,7 +153,6 @@ def run_training(cfg: dict) -> float:
                 sample_batch=sample_batch,
                 num_classes=num_classes,
                 device=device)
-            logging.info(f"Model created: {model}")
             optimizer = torch.optim.Adam(
                 model.parameters(),
                 lr=cfg.get("training", {}).get("lr", 0.001),
