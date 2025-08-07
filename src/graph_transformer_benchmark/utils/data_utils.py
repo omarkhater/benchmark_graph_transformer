@@ -6,12 +6,15 @@ import statistics
 from collections import Counter
 
 import mlflow
+import torch
 from torch_geometric.loader import DataLoader
+from torch_geometric.utils import degree
 
 __all__ = [
     "log_dataset_stats",
     "infer_num_node_features",
     "infer_num_classes",
+    "compute_max_degree",
     ]
 
 
@@ -123,3 +126,42 @@ def infer_num_classes(loader: DataLoader) -> int:
     labels = batch.y
     return int(
         labels.size(-1) if labels.dim() > 1 else labels.max().item() + 1)
+
+
+def compute_max_degree(loader: DataLoader) -> int:
+    """
+    Compute the maximum degree across all graphs in the dataset.
+
+    This function iterates through the entire dataset to find the maximum
+    node degree, which is essential for proper initialization of DegreeEncoder
+    to avoid CUDA device-side assert errors.
+
+    Parameters
+    ----------
+    loader : DataLoader
+        DataLoader containing graph data
+
+    Returns
+    -------
+    int
+        Maximum degree found in the dataset
+
+    Notes
+    -----
+    This function processes the entire dataset, so it may be slow for large
+    datasets. The result should be cached if called multiple times.
+    """
+    max_degree = 0
+
+    for batch in loader:
+        if not (hasattr(batch, 'edge_index') and batch.edge_index.numel() > 0):
+            continue
+
+        num_nodes = batch.num_nodes
+        row = batch.edge_index[0]
+        degrees = degree(row, num_nodes, dtype=torch.long)
+        batch_max = int(degrees.max().item())
+        max_degree = max(max_degree, batch_max)
+
+    # Return at least 1 to avoid issues with empty graphs
+    return max(max_degree, 1)

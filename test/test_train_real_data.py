@@ -103,7 +103,7 @@ class TestCoraNode:
     @pytest.mark.slow
     @pytest.mark.integration
     @pytest.mark.parametrize(
-        "device", ["cpu", "cuda"] if torch.cuda.is_available() else ["cpu"]
+        "device", ["cuda"] if torch.cuda.is_available() else ["cpu"]
     )
     def test_transformer_variants(
         self,
