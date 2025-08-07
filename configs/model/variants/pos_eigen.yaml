@@ -3,15 +3,9 @@ defaults:
 
 encoder_cfg:
   positional:
-    degree:
-      enabled: false
-      max_degree: 32
     eig:
       enabled: true
       num_eigenc: 8
-    svd:
-      enabled: false
-      num_svdenc: 8
 task: graph
 type: GraphTransformer
 training:

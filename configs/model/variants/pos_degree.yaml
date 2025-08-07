@@ -6,12 +6,6 @@ encoder_cfg:
     degree:
       enabled: true
       max_degree: 32
-    eig:
-      enabled: false
-      num_eigenc: 8
-    svd:
-      enabled: false
-      num_svdenc: 8
 task: graph
 type: GraphTransformer
 training:

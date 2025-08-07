@@ -3,12 +3,6 @@ defaults:
 
 encoder_cfg:
   positional:
-    degree:
-      enabled: false
-      max_degree: 32
-    eig:
-      enabled: false
-      num_eigenc: 8
     svd:
       enabled: true
       num_svdenc: 8

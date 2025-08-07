@@ -38,8 +38,6 @@ def cfg_transformer(request) -> dict:
         },
         "positional": {
             "degree": {"enabled": False, "max_degree": 3},
-            "eig": {"enabled": False, "num_eigenc": 4, "num_eigvec": 3},
-            "svd": {"enabled": False, "num_svdenc": 3},
         },
     }
 
