@@ -38,6 +38,27 @@ def flag_single_graph(data: Data) -> Data:
     return data
 
 
+def convert_node_features_to_float(data: Data) -> Data:
+    """Convert node features to float dtype if they are integer.
+
+    This transformation is needed for datasets like ZINC where node features
+    are stored as integers but the GraphTransformer model expects float inputs
+    for its linear layers.
+
+    Parameters
+    ----------
+    data : Data
+        The data object to be transformed.
+    Returns
+    -------
+    Data
+        The transformed data object with node features as float.
+    """
+    if data.x is not None and not data.x.is_floating_point():
+        data.x = data.x.float()
+    return data
+
+
 def get_dataset(name: str, root: Path) -> Dataset:
     """Return a PyG dataset object chosen by *name*.
     The dataset is downloaded to *root* if it does not exist yet.
@@ -68,7 +89,13 @@ def get_dataset(name: str, root: Path) -> Dataset:
     if key in {"cora", "citeseer", "pubmed"}:
         return Planetoid(root=str(root / "Planetoid"), name=key.capitalize())
     if key == "zinc":
-        return ZINC(root=str(root / "ZINC"))
+        return ZINC(
+            root=str(root / "ZINC"),
+            transform=convert_node_features_to_float
+        )
     if key == "qm7b":
-        return QM7b(root=str(root / "QM7b"))
+        return QM7b(
+            root=str(root / "QM7b"),
+            transform=convert_node_features_to_float
+        )
     raise ValueError(f"Unsupported dataset '{name}'.")
